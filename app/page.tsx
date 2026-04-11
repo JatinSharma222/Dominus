@@ -1,65 +1,154 @@
-import Image from "next/image";
+"use client"
+
+import { useChat } from "ai/react"
+import { useWallet } from "@solana/wallet-adapter-react"
+import { useWalletModal } from "@solana/wallet-adapter-react-ui"
+import { useState, useRef, useEffect } from "react"
+import ChatWindow from "@/components/ChatWindow"
+import { Message } from "@/lib/types"
+import { shortenAddress } from "@/lib/solana"
 
 export default function Home() {
+  const { publicKey, disconnect, connected } = useWallet()
+  const { setVisible } = useWalletModal()
+  const [input, setInput] = useState("")
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  const { messages, append, isLoading } = useChat({
+    api: "/api/chat",
+    body: {
+      walletAddress: publicKey?.toString(),
+    },
+  })
+
+  // Cast to our Message type
+  const typedMessages: Message[] = messages.map((m) => ({
+    id: m.id,
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }))
+
+  // Auto-resize textarea as user types
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto"
+      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`
+    }
+  }, [input])
+
+  async function handleSend() {
+    const trimmed = input.trim()
+    if (!trimmed || isLoading) return
+    setInput("")
+    await append({ role: "user", content: trimmed })
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  async function handleSuggestion(prompt: string) {
+    if (isLoading) return
+    await append({ role: "user", content: prompt })
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="flex flex-col h-screen bg-background overflow-hidden">
+
+      {/* ── Top Nav ── */}
+      <nav className="h-16 flex items-center justify-between px-8 bg-neutral-950/40 backdrop-blur-xl border-b border-white/10 shrink-0">
+        {/* Brand */}
+        <span className="font-headline text-2xl font-bold tracking-tighter text-primary drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]">
+          DOMINUS
+        </span>
+
+        {/* Right side */}
+        <div className="flex items-center gap-4">
+          {connected && publicKey ? (
+            <button
+              onClick={() => disconnect()}
+              className="px-4 py-2 bg-primary/10 border border-primary/20 rounded-lg font-label text-[10px] text-primary tracking-widest uppercase hover:bg-primary/20 transition-colors"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              <span className="material-symbols-outlined text-sm mr-2 align-middle">
+                account_balance_wallet
+              </span>
+              {shortenAddress(publicKey.toString())}
+            </button>
+          ) : (
+            <button
+              onClick={() => setVisible(true)}
+              className="px-6 py-2 bg-gradient-to-r from-primary to-primary-container text-on-primary font-label font-bold tracking-[0.2em] text-xs uppercase rounded shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:scale-105 active:scale-95 transition-all"
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              CONNECT WALLET
+            </button>
+          )}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </nav>
+
+      {/* ── Chat Area ── */}
+      <ChatWindow messages={typedMessages} isLoading={isLoading} />
+
+      {/* ── Suggestion Chips (show only when no messages) ── */}
+      {messages.length === 0 && (
+        <div className="flex gap-2 px-6 pb-3 flex-wrap justify-center shrink-0">
+          {[
+            "Swap SOL → USDC",
+            "Check Portfolio",
+            "Stake SOL",
+            "Best Yield Now",
+          ].map((chip) => (
+            <button
+              key={chip}
+              onClick={() => handleSuggestion(chip)}
+              className="px-4 py-2 bg-surface-container-low border border-outline-variant/20 rounded-full font-label text-xs text-neutral-400 hover:text-primary hover:border-primary/30 hover:bg-surface-container-high tracking-widest uppercase transition-all"
+            >
+              {chip}
+            </button>
+          ))}
         </div>
-      </main>
+      )}
+
+      {/* ── Input Bar ── */}
+      <div className="px-6 pb-6 pt-2 shrink-0">
+        <div className="relative flex items-end gap-3 bg-surface-container-lowest rounded-lg px-4 py-3 focus-within:shadow-[0_0_0_1px_rgba(255,193,116,0.3)] transition-all">
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Describe what you want to do with your crypto..."
+            rows={1}
+            className="flex-1 bg-transparent font-body text-sm text-on-surface placeholder:text-neutral-600 resize-none outline-none leading-relaxed max-h-40 overflow-y-auto"
+          />
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || isLoading}
+            className="shrink-0 w-9 h-9 flex items-center justify-center bg-gradient-to-r from-primary to-primary-container rounded text-on-primary disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105 active:scale-95 transition-all shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+          >
+            <span className="material-symbols-outlined text-lg">send</span>
+          </button>
+        </div>
+        <p className="text-center font-label text-[9px] text-neutral-600 tracking-widest uppercase mt-2">
+          DOMINUS NEVER EXECUTES WITHOUT YOUR CONFIRMATION
+        </p>
+      </div>
+
+      {/* ── Bottom Status Bar ── */}
+      <div className="h-10 flex items-center justify-between px-8 bg-neutral-950/80 backdrop-blur-md border-t border-white/10 shrink-0">
+        <div className="flex items-center gap-3">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+          <span className="font-label text-[9px] text-neutral-400 tracking-[0.2em] uppercase">
+            {connected ? "Wallet Connected" : "Core Prime Online"}
+          </span>
+        </div>
+        <span className="font-label text-[9px] text-neutral-600 tracking-[0.2em] uppercase">
+          v1.0.0 — DEVNET
+        </span>
+      </div>
+
     </div>
-  );
+  )
 }
