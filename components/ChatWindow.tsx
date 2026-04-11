@@ -4,15 +4,24 @@ import { useEffect, useRef } from "react"
 import { Message } from "@/lib/types"
 import MessageBubble from "./MessageBubble"
 
+interface ToolInvocation {
+  toolName: string
+  state: "call" | "result" | "partial-call"
+  result?: unknown
+}
+
+interface ExtendedMessage extends Message {
+  toolInvocations?: ToolInvocation[]
+}
+
 interface ChatWindowProps {
-  messages: Message[]
+  messages: ExtendedMessage[]
   isLoading: boolean
 }
 
 export default function ChatWindow({ messages, isLoading }: ChatWindowProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll to bottom on every new message
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, isLoading])
@@ -20,10 +29,7 @@ export default function ChatWindow({ messages, isLoading }: ChatWindowProps) {
   if (messages.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8">
-        {/* Atmospheric orb */}
         <div className="absolute w-[400px] h-[400px] bg-primary-container/10 blur-[120px] rounded-full pointer-events-none" />
-
-        {/* Empty state */}
         <div className="relative text-center space-y-3">
           <p className="font-label text-[10px] text-primary tracking-[0.4em] uppercase">
             SYSTEM STATUS: ONLINE
@@ -36,8 +42,6 @@ export default function ChatWindow({ messages, isLoading }: ChatWindowProps) {
             Dominus handles the rest.
           </p>
         </div>
-
-        {/* Example prompts */}
         <div className="relative flex flex-col gap-2 mt-4 w-full max-w-md">
           {[
             "What's my portfolio worth?",
@@ -61,22 +65,19 @@ export default function ChatWindow({ messages, isLoading }: ChatWindowProps) {
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-      {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} />
+      {messages.map((message, i) => (
+        <MessageBubble
+          key={message.id}
+          message={message}
+          isLoading={isLoading && i === messages.length - 1}
+        />
       ))}
-
-      {/* Show thinking dots when AI is loading but no streaming content yet */}
       {isLoading && messages[messages.length - 1]?.role === "user" && (
         <MessageBubble
-          message={{
-            id: "thinking",
-            role: "assistant",
-            content: "",
-          }}
+          message={{ id: "thinking", role: "assistant", content: "" }}
+          isLoading={true}
         />
       )}
-
-      {/* Scroll anchor */}
       <div ref={bottomRef} />
     </div>
   )

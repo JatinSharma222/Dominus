@@ -22,11 +22,39 @@ export default function Home() {
   })
 
   // Cast to our Message type
-  const typedMessages: Message[] = messages.map((m) => ({
+const typedMessages = messages.map((m) => {
+  let content = ""
+  if (typeof m.content === "string") {
+    content = m.content
+  } else if (Array.isArray(m.content)) {
+    content = (m.content as { type: string; text?: string }[])
+      .filter((p) => p.type === "text" && p.text)
+      .map((p) => p.text)
+      .join("")
+  }
+
+  if (!content && m.toolInvocations?.length) {
+    const results = m.toolInvocations
+      .filter((t) => t.state === "result")
+      .map((t) => {
+        const r = t.result as Record<string, unknown>
+        return r?.summary as string || JSON.stringify(t.result, null, 2)
+      })
+      .join("\n")
+    content = results || ""
+  }
+console.log("last msg:", JSON.stringify(messages[messages.length-1], null, 2))
+  return {
     id: m.id,
     role: m.role as "user" | "assistant",
-    content: m.content,
-  }))
+    content,
+    toolInvocations: m.toolInvocations as {
+      toolName: string
+      state: "call" | "result" | "partial-call"
+      result?: unknown
+    }[],
+  }
+})
 
   // Auto-resize textarea as user types
   useEffect(() => {
