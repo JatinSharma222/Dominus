@@ -1,4 +1,8 @@
-// Tools will be added here as we build them
-// Stubbed so the chat route can compile cleanly
+import { portfolioTool, executePortfolioRead } from "./portfolio"
 
-export const allTools = {}
+export const allTools = {
+  get_portfolio: {
+    ...portfolioTool,
+    execute: executePortfolioRead,
+  },
+}
