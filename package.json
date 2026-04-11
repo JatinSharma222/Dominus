@@ -9,9 +9,23 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.69",
+    "@ai-sdk/openai": "^3.0.52",
+    "@kamino-finance/klend-sdk": "^7.3.22",
+    "@solana/spl-stake-pool": "^1.1.8",
+    "@solana/wallet-adapter-base": "^0.9.27",
+    "@solana/wallet-adapter-react": "^0.15.39",
+    "@solana/wallet-adapter-react-ui": "^0.9.39",
+    "@solana/wallet-adapter-wallets": "^0.19.38",
+    "@solana/web3.js": "^1.98.4",
+    "ai": "^6.0.158",
+    "bignumber.js": "^10.0.2",
+    "bs58": "^6.0.0",
     "next": "16.2.3",
+    "ollama-ai-provider": "^1.2.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "solana-agent-kit": "^2.0.10"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
