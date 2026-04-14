@@ -10,7 +10,7 @@ export interface LLMConfig {
 export function getLLMConfig(overrides?: Partial<LLMConfig>): LLMConfig {
   return {
     provider: (overrides?.provider ?? process.env.LLM_PROVIDER ?? "ollama") as LLMProvider,
-    model: overrides?.model ?? process.env.OLLAMA_MODEL ?? "qwen2.5:14b",
+    model: overrides?.model ?? process.env.OLLAMA_MODEL ?? "llama3.1:8b",
     baseUrl: overrides?.baseUrl ?? process.env.OLLAMA_BASE_URL ?? "http://localhost:11434",
     apiKey: overrides?.apiKey,
     ...overrides,

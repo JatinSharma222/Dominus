@@ -1,4 +1,8 @@
+"use client"
+
 import { Message } from "@/lib/types"
+import { JupiterSwapIntent } from "@/lib/tools/jupiter"
+import TxConfirmCard from "./TxConfirmCard"
 
 interface ToolInvocation {
   toolName: string
@@ -11,6 +15,22 @@ interface MessageBubbleProps {
   isLoading?: boolean
 }
 
+function isSwapIntent(result: unknown): result is JupiterSwapIntent {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as Record<string, unknown>).type === "swap_intent"
+  )
+}
+
+const toolLabels: Record<string, string> = {
+  get_portfolio:         "Reading wallet balances...",
+  swap_tokens:           "Resolving swap route via Jupiter...",
+  deposit_for_yield:     "Checking Kamino yield rates...",
+  stake_sol:             "Fetching Jito staking data...",
+  create_payment_stream: "Setting up Streamflow payment...",
+}
+
 export default function MessageBubble({ message, isLoading }: MessageBubbleProps) {
   const isAI = message.role === "assistant"
   const time = new Date().toLocaleTimeString("en-US", {
@@ -19,24 +39,20 @@ export default function MessageBubble({ message, isLoading }: MessageBubbleProps
     hour12: false,
   })
 
-  const toolLabels: Record<string, string> = {
-    get_portfolio: "Reading wallet balances via Helius...",
-    swap_tokens: "Fetching best swap route via Jupiter...",
-    deposit_for_yield: "Checking Kamino yield rates...",
-    stake_sol: "Fetching Jito staking data...",
-    create_payment_stream: "Setting up Streamflow payment...",
-  }
+  const swapIntents = (message.toolInvocations ?? [])
+    .filter((t) => t.state === "result" && isSwapIntent(t.result))
+    .map((t) => t.result as JupiterSwapIntent)
 
   if (isAI) {
     return (
-      <div className="flex flex-col gap-1 max-w-[80%] mr-auto">
+      <div className="flex flex-col gap-1 max-w-[85%] mr-auto">
         <span className="font-label text-[10px] text-neutral-500 tracking-widest uppercase pl-6">
           AETHER-01 CORE // {time}
         </span>
 
         <div className="bg-surface-container-low border-l-4 border-primary/40 p-4 pl-6 rounded-lg space-y-3">
 
-          {/* Tool invocation states */}
+          {/* Tool invocation status badges */}
           {message.toolInvocations?.map((tool, i) => (
             <div key={i} className="flex items-center gap-3">
               {tool.state === "call" || tool.state === "partial-call" ? (
@@ -50,14 +66,24 @@ export default function MessageBubble({ message, isLoading }: MessageBubbleProps
                 <>
                   <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                   <span className="font-label text-[10px] text-primary tracking-widest uppercase">
-                    {toolLabels[tool.toolName]?.replace("...", " ✓") ?? `${tool.toolName} complete`}
+                    {toolLabels[tool.toolName]?.replace("...", " ✓") ?? `${tool.toolName} ✓`}
                   </span>
                 </>
               )}
             </div>
           ))}
 
-          {/* Main content */}
+          {/* TxConfirmCard — rendered for each swap intent, fetches quote client-side */}
+          {swapIntents.map((intent, i) => (
+            <TxConfirmCard
+              key={i}
+              intent={intent}
+              onSuccess={(txid) => console.log("Tx confirmed:", txid)}
+              onCancel={() => console.log("Tx cancelled")}
+            />
+          ))}
+
+          {/* Main text content */}
           {message.content ? (
             <p className="font-body text-sm text-on-surface leading-relaxed whitespace-pre-wrap">
               {message.content}
@@ -70,7 +96,7 @@ export default function MessageBubble({ message, isLoading }: MessageBubbleProps
                 <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-pulse [animation-delay:0.4s]" />
               </div>
               <span className="font-label text-[10px] text-neutral-500 tracking-widest uppercase animate-pulse">
-                {message.toolInvocations?.some(t => t.state === "result")
+                {message.toolInvocations?.some((t) => t.state === "result")
                   ? "Generating response..."
                   : message.toolInvocations?.length
                   ? "Processing..."

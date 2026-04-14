@@ -5,7 +5,6 @@ import { useWallet } from "@solana/wallet-adapter-react"
 import { useWalletModal } from "@solana/wallet-adapter-react-ui"
 import { useState, useRef, useEffect } from "react"
 import ChatWindow from "@/components/ChatWindow"
-import { Message } from "@/lib/types"
 import { shortenAddress } from "@/lib/solana"
 
 export default function Home() {
@@ -21,42 +20,55 @@ export default function Home() {
     },
   })
 
-  // Cast to our Message type
-const typedMessages = messages.map((m) => {
-  let content = ""
-  if (typeof m.content === "string") {
-    content = m.content
-  } else if (Array.isArray(m.content)) {
-    content = (m.content as { type: string; text?: string }[])
-      .filter((p) => p.type === "text" && p.text)
-      .map((p) => p.text)
-      .join("")
-  }
+  // Build typed messages — parse toolInvocations from SDK (Anthropic/OpenAI path)
+  // or from message.annotations (Ollama path — tool results sent via 8: stream)
+  const typedMessages = messages.map((m) => {
+    // Extract text content
+    let content = ""
+    if (typeof m.content === "string") {
+      content = m.content
+    } else if (Array.isArray(m.content)) {
+      content = (m.content as { type: string; text?: string }[])
+        .filter((p) => p.type === "text" && p.text)
+        .map((p) => p.text)
+        .join("")
+    }
 
-  if (!content && m.toolInvocations?.length) {
-    const results = m.toolInvocations
-      .filter((t) => t.state === "result")
-      .map((t) => {
-        const r = t.result as Record<string, unknown>
-        return r?.summary as string || JSON.stringify(t.result, null, 2)
-      })
-      .join("\n")
-    content = results || ""
-  }
-console.log("last msg:", JSON.stringify(messages[messages.length-1], null, 2))
-  return {
-    id: m.id,
-    role: m.role as "user" | "assistant",
-    content,
-    toolInvocations: m.toolInvocations as {
-      toolName: string
-      state: "call" | "result" | "partial-call"
-      result?: unknown
-    }[],
-  }
-})
+    // Try SDK-native toolInvocations first (Anthropic/OpenAI path)
+    let toolInvocations:
+      | {
+          toolName: string
+          state: "call" | "result" | "partial-call"
+          result?: unknown
+        }[]
+      | undefined = m.toolInvocations as typeof toolInvocations
 
-  // Auto-resize textarea as user types
+    // Fallback: parse annotations from Ollama path (8: stream → message.annotations)
+    if (!toolInvocations?.length && m.annotations?.length) {
+      const annotationTools = (m.annotations as unknown[]).filter(
+        (a): a is { toolName: string; result: unknown } =>
+          typeof a === "object" && a !== null && "toolName" in a
+      )
+
+      if (annotationTools.length) {
+        console.log("[page] annotation tool results:", JSON.stringify(annotationTools, null, 2))
+        toolInvocations = annotationTools.map((a) => ({
+          toolName: a.toolName,
+          state: "result" as const,
+          result: a.result,
+        }))
+      }
+    }
+
+    return {
+      id: m.id,
+      role: m.role as "user" | "assistant",
+      content,
+      toolInvocations,
+    }
+  })
+
+  // Auto-resize textarea
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.style.height = "auto"
@@ -88,12 +100,9 @@ console.log("last msg:", JSON.stringify(messages[messages.length-1], null, 2))
 
       {/* ── Top Nav ── */}
       <nav className="h-16 flex items-center justify-between px-8 bg-neutral-950/40 backdrop-blur-xl border-b border-white/10 shrink-0">
-        {/* Brand */}
         <span className="font-headline text-2xl font-bold tracking-tighter text-primary drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]">
           DOMINUS
         </span>
-
-        {/* Right side */}
         <div className="flex items-center gap-4">
           {connected && publicKey ? (
             <button
