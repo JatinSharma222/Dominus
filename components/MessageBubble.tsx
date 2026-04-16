@@ -2,7 +2,9 @@
 
 import { Message } from "@/lib/types"
 import { JupiterSwapIntent } from "@/lib/tools/jupiter"
+import { KaminoDepositIntent } from "@/lib/tools/kamino"
 import TxConfirmCard from "./TxConfirmCard"
+import KaminoDepositCard from "./KaminoDepositCard"
 
 interface ToolInvocation {
   toolName: string
@@ -23,10 +25,18 @@ function isSwapIntent(result: unknown): result is JupiterSwapIntent {
   )
 }
 
+function isKaminoDepositIntent(result: unknown): result is KaminoDepositIntent {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as Record<string, unknown>).type === "kamino_deposit_intent"
+  )
+}
+
 const toolLabels: Record<string, string> = {
   get_portfolio:         "Reading wallet balances...",
   swap_tokens:           "Resolving swap route via Jupiter...",
-  deposit_for_yield:     "Checking Kamino yield rates...",
+  deposit_for_yield:     "Loading Kamino yield rates...",
   stake_sol:             "Fetching Jito staking data...",
   create_payment_stream: "Setting up Streamflow payment...",
 }
@@ -42,6 +52,10 @@ export default function MessageBubble({ message, isLoading }: MessageBubbleProps
   const swapIntents = (message.toolInvocations ?? [])
     .filter((t) => t.state === "result" && isSwapIntent(t.result))
     .map((t) => t.result as JupiterSwapIntent)
+
+  const kaminoDepositIntents = (message.toolInvocations ?? [])
+    .filter((t) => t.state === "result" && isKaminoDepositIntent(t.result))
+    .map((t) => t.result as KaminoDepositIntent)
 
   if (isAI) {
     return (
@@ -73,13 +87,23 @@ export default function MessageBubble({ message, isLoading }: MessageBubbleProps
             </div>
           ))}
 
-          {/* TxConfirmCard — rendered for each swap intent, fetches quote client-side */}
+          {/* Jupiter swap cards */}
           {swapIntents.map((intent, i) => (
             <TxConfirmCard
-              key={i}
+              key={`swap-${i}`}
               intent={intent}
-              onSuccess={(txid) => console.log("Tx confirmed:", txid)}
-              onCancel={() => console.log("Tx cancelled")}
+              onSuccess={(txid) => console.log("Swap confirmed:", txid)}
+              onCancel={() => console.log("Swap cancelled")}
+            />
+          ))}
+
+          {/* Kamino deposit cards */}
+          {kaminoDepositIntents.map((intent, i) => (
+            <KaminoDepositCard
+              key={`kamino-${i}`}
+              intent={intent}
+              onSuccess={(txid) => console.log("Kamino deposit confirmed:", txid)}
+              onCancel={() => console.log("Kamino deposit cancelled")}
             />
           ))}
 

@@ -9,6 +9,7 @@ import { getLLMConfig } from "@/lib/llm/config"
 import { allTools } from "@/lib/tools"
 import { executePortfolioRead } from "@/lib/tools/portfolio"
 import { executeJupiterSwap } from "@/lib/tools/jupiter"
+import { executeKaminoDeposit } from "@/lib/tools/kamino"
 
 export const maxDuration = 60
 
@@ -21,6 +22,8 @@ const toolExecutors: Record<string, (args: Record<string, unknown>) => Promise<u
     executeJupiterSwap(
       args as { fromToken: string; toToken: string; amount: number; slippage: number }
     ),
+  deposit_for_yield: (args) =>
+    executeKaminoDeposit(args as { token: string; amount: number }),
 }
 
 // ─── Fallback: extract tool call from plain-text model output ─────────────────
@@ -102,17 +105,17 @@ export async function POST(req: NextRequest) {
       ]
       if (greetingPatterns.some((p) => p.test(text))) {
         return makeTextStream(
-          "Hello! I'm Dominus, your Solana DeFi agent. I can check your portfolio, get swap quotes, stake SOL, or set up recurring payments. What would you like to do?"
+          "Hello! I'm Dominus, your Solana DeFi agent. I can check your portfolio, get swap quotes, deposit tokens to earn yield on Kamino, and more. What would you like to do?"
         )
       }
 
       // Confirmation after a quote → tell user to click the button
       const confirmPatterns = [
-        /^(yes|yeah|yep|ok|okay|sure|confirm|do it|go ahead|initiate|execute|proceed|looks good|do the swap|make it happen)[\s!?.]*$/,
+        /^(yes|yeah|yep|ok|okay|sure|confirm|do it|go ahead|initiate|execute|proceed|looks good|do the swap|make it happen|deposit it|do the deposit)[\s!?.]*$/,
       ]
       if (confirmPatterns.some((p) => p.test(text))) {
         return makeTextStream(
-          "To execute the swap, click the CONFIRM TRANSACTION button in the quote card above. Dominus never executes without your explicit on-screen confirmation."
+          "To execute, click the CONFIRM button in the card above. Dominus never executes without your explicit on-screen confirmation."
         )
       }
     }
@@ -176,6 +179,21 @@ export async function POST(req: NextRequest) {
               slippage:  { type: "number", description: "Slippage tolerance % (default 0.5)" },
             } as Record<string, { type?: string; description?: string }>,
             required: ["fromToken", "toToken", "amount"],
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
+          name: "deposit_for_yield",
+          description: allTools.deposit_for_yield.description,
+          parameters: {
+            type: "object",
+            properties: {
+              token:  { type: "string", description: "Token symbol to deposit (USDC, USDT, SOL, MSOL, JITOSOL). Uppercase." },
+              amount: { type: "number", description: "Amount of tokens to deposit" },
+            } as Record<string, { type?: string; description?: string }>,
+            required: ["token", "amount"],
           },
         },
       },
@@ -244,6 +262,7 @@ export async function POST(req: NextRequest) {
               "Do NOT add any parenthetical notes about your own reasoning or rule-following. " +
               "If the result contains an 'error' field, explain what went wrong in one sentence. " +
               "If the result is a swap_intent, say only: 'Here is your swap quote for [amount] [fromToken] → [toToken].' " +
+              "If the result is a kamino_deposit_intent, say only: 'Here is your Kamino deposit preview for [amount] [token].' " +
               "If the result is a portfolio, say only: 'Your wallet holds [X] SOL and [N] token type(s).'",
           },
         ],
@@ -262,7 +281,6 @@ export async function POST(req: NextRequest) {
         controller.enqueue(encoder.encode(`0:${JSON.stringify(finalText)}\n`))
 
         if (toolResults.length > 0) {
-          // 8: annotation — picked up by useChat and attached to the message
           controller.enqueue(encoder.encode(`8:${JSON.stringify(toolResults)}\n`))
         }
 
@@ -296,25 +314,32 @@ function buildSystemPrompt(walletAddress?: string): string {
 
 ${walletLine}
 
-You have two tools:
-- get_portfolio: reads wallet balances
-- swap_tokens: prepares a swap quote (does NOT execute any transaction)
+You have three tools:
+- get_portfolio: reads wallet balances and token holdings
+- swap_tokens: prepares a Jupiter swap quote (does NOT execute any transaction)
+- deposit_for_yield: prepares a Kamino lending deposit preview (does NOT execute any transaction)
 
 CRITICAL — NEVER DO THESE:
-- NEVER say a swap was "initiated", "executed", "sent", "completed", or "confirmed"
+- NEVER say a swap or deposit was "initiated", "executed", "sent", "completed", or "confirmed"
 - NEVER claim to have performed any on-chain action
 - NEVER add parenthetical self-commentary like "(I corrected..." or "(Note: I didn't..."
 - NEVER print JSON, tool names, or parameter objects in your response
 
 TOOL CALL RULES:
 - ONLY call get_portfolio if the user explicitly asks about balance, portfolio, holdings, or tokens
-- ONLY call swap_tokens if the user explicitly asks to swap/trade/convert with a specific amount
+- ONLY call swap_tokens if the user explicitly asks to swap/trade/convert with a specific amount and tokens
+- ONLY call deposit_for_yield if the user explicitly asks to deposit/earn yield/lend tokens
 - For greetings — respond with a short greeting, NO tools
 - For vague messages — ask a clarifying question, NO tools
-- If user says "yes", "confirm", "do it" after a quote — tell them to click the Confirm button in the card
+- If user says "yes", "confirm", "do it" after seeing a card — tell them to click the Confirm button
+
+CHAINING GUIDANCE:
+- If user says "swap X then deposit it" — call swap_tokens first; tell them to confirm the swap, then you can prepare the deposit
+- If user says "what's the best yield?" — ask what token they want to deposit, then call deposit_for_yield
 
 RESPONSE FORMAT:
 - After get_portfolio: one sentence — SOL balance and token count only
 - After swap_tokens: one sentence — "Here is your swap quote for [X] [TOKEN] → [TOKEN]."
+- After deposit_for_yield: one sentence — "Here is your Kamino deposit preview for [X] [TOKEN]."
 - After an error: one sentence explaining what went wrong`
 }
