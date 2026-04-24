@@ -84,8 +84,21 @@ function makeTextStream(text: string): Response {
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages, walletAddress, llmConfig } = await req.json()
-    const config = getLLMConfig(llmConfig)
+    const { messages, walletAddress, llmOverride } = await req.json()
+
+    // Map the client-side llmOverride shape → getLLMConfig overrides
+    // Ollama:   { provider, baseUrl, model }
+    // Hosted:   { provider, apiKey, model }
+    const config = getLLMConfig(
+      llmOverride
+        ? {
+            provider: llmOverride.provider,
+            model: llmOverride.model || undefined,
+            baseUrl: llmOverride.baseUrl || undefined,
+            apiKey: llmOverride.apiKey || undefined,
+          }
+        : undefined
+    )
 
     // ── Pre-flight: intercept messages that should never trigger tools ────────
     const lastUserMessage = [...messages]

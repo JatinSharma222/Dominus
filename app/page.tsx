@@ -5,6 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react"
 import { useWalletModal } from "@solana/wallet-adapter-react-ui"
 import { useState, useRef, useEffect } from "react"
 import ChatWindow from "@/components/ChatWindow"
+import LLMSettings, { LLMSettingsConfig, loadLLMConfig } from "@/components/LLMSettings"
 import { shortenAddress } from "@/lib/solana"
 
 export default function Home() {
@@ -12,12 +13,37 @@ export default function Home() {
   const { setVisible } = useWalletModal()
   const [input, setInput] = useState("")
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [llmConfig, setLLMConfig] = useState<LLMSettingsConfig | null>(null)
+
+  // Load LLM config from localStorage on mount (client-only)
+  useEffect(() => {
+    setLLMConfig(loadLLMConfig())
+  }, [])
+
+  // Build the extra body fields sent with every chat request.
+  // The chat route reads these to override the server-side env defaults.
+  const chatBody = {
+    walletAddress: publicKey?.toString(),
+    ...(llmConfig && {
+      llmOverride:
+        llmConfig.mode === "ollama"
+          ? {
+              provider: "ollama" as const,
+              baseUrl: llmConfig.ollamaBaseUrl,
+              model: llmConfig.ollamaModel,
+            }
+          : {
+              provider: llmConfig.provider,
+              apiKey: llmConfig.apiKey,
+              model: llmConfig.model || undefined,
+            },
+    }),
+  }
 
   const { messages, append, isLoading } = useChat({
     api: "/api/chat",
-    body: {
-      walletAddress: publicKey?.toString(),
-    },
+    body: chatBody,
   })
 
   // Build typed messages — parse toolInvocations from SDK (Anthropic/OpenAI path)
@@ -95,6 +121,19 @@ export default function Home() {
     await append({ role: "user", content: prompt })
   }
 
+  function handleSettingsSave(config: LLMSettingsConfig) {
+    setLLMConfig(config)
+    setIsSettingsOpen(false)
+  }
+
+  // Derive display label for the active LLM in the status bar
+  const llmLabel =
+    llmConfig?.mode === "api"
+      ? llmConfig.provider === "anthropic"
+        ? `ANTHROPIC — ${llmConfig.model || "DEFAULT"}`
+        : `OPENAI — ${llmConfig.model || "DEFAULT"}`
+      : `OLLAMA — ${llmConfig?.ollamaModel ?? "llama3.1:8b"}`
+
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
 
@@ -103,7 +142,22 @@ export default function Home() {
         <span className="font-headline text-2xl font-bold tracking-tighter text-primary drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]">
           DOMINUS
         </span>
-        <div className="flex items-center gap-4">
+
+        <div className="flex items-center gap-3">
+          {/* Settings icon */}
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            title="LLM Settings"
+            className={`w-9 h-9 flex items-center justify-center rounded transition-all ${
+              isSettingsOpen
+                ? "bg-primary/15 text-primary"
+                : "text-neutral-400 hover:text-primary hover:bg-primary/10"
+            }`}
+          >
+            <span className="material-symbols-outlined text-xl">settings</span>
+          </button>
+
+          {/* Wallet button */}
           {connected && publicKey ? (
             <button
               onClick={() => disconnect()}
@@ -180,11 +234,22 @@ export default function Home() {
           <span className="font-label text-[9px] text-neutral-400 tracking-[0.2em] uppercase">
             {connected ? "Wallet Connected" : "Core Prime Online"}
           </span>
+          <span className="h-3 w-px bg-white/10" />
+          <span className="font-label text-[9px] text-neutral-600 tracking-[0.15em] uppercase">
+            {llmLabel}
+          </span>
         </div>
         <span className="font-label text-[9px] text-neutral-600 tracking-[0.2em] uppercase">
           v1.0.0 — DEVNET
         </span>
       </div>
+
+      {/* ── LLM Settings Panel ── */}
+      <LLMSettings
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onSave={handleSettingsSave}
+      />
 
     </div>
   )
