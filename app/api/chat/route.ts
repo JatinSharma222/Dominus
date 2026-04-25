@@ -62,6 +62,44 @@ function cleanModelText(text: string): string {
     .trim()
 }
 
+// ─── Summary prompt builder ───────────────────────────────────────────────────
+// Generates a tailored summary instruction based on which tools were called.
+// Multi-tool calls get a combined sentence per result.
+
+function buildSummaryPrompt(toolResults: Array<{ toolName: string; result: unknown }>): string {
+  const instructions = toolResults.map(({ toolName, result }) => {
+    const r = result as Record<string, unknown>
+    if (r?.error) return `For the ${toolName} error: explain what went wrong in one sentence.`
+
+    switch (toolName) {
+      case "get_portfolio":
+        return "For the portfolio: say exactly 'Your wallet holds [X] SOL and [N] token type(s).' filling in real values."
+      case "swap_tokens":
+        return "For the swap: say exactly 'Here is your swap quote for [amount] [fromToken] → [toToken].' filling in real values."
+      case "deposit_for_yield":
+        return "For the deposit: say exactly 'Here is your Kamino deposit preview for [amount] [token].' filling in real values."
+      default:
+        return `For ${toolName}: summarise the result in one plain-English sentence.`
+    }
+  })
+
+  const multiStep = toolResults.length > 1
+
+  return [
+    multiStep
+      ? "Write a short summary (one sentence per action) covering each of the following results in order:"
+      : "Write a single plain-English sentence covering the following result:",
+    ...instructions,
+    "",
+    "RULES — violating any of these is wrong:",
+    "- Do NOT include JSON, code, tool names, or parameter objects",
+    "- Do NOT say any transaction was executed, initiated, sent, completed, or confirmed — none were",
+    "- Do NOT add parenthetical self-commentary or reasoning notes",
+    "- Do NOT use markdown formatting",
+    "- Respond only in English",
+  ].join("\n")
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makeTextStream(text: string): Response {
@@ -152,7 +190,11 @@ export async function POST(req: NextRequest) {
       return result.toDataStreamResponse()
     }
 
-    // ── Ollama: manual tool loop with text-fallback ───────────────────────────
+    // ── Ollama: agentic tool loop with text-fallback ──────────────────────────
+    // Each round: model responds → execute any tool calls → append results → repeat.
+    // Loop exits when model returns text with no tool calls (it's done),
+    // or MAX_TOOL_ROUNDS is reached. A clean summary call always follows.
+
     const ollama = new Ollama({ host: config.baseUrl || "http://localhost:11434" })
 
     const ollamaMessages = [
@@ -212,26 +254,33 @@ export async function POST(req: NextRequest) {
       },
     ]
 
-    // Step 1: initial model call
-    const response = await ollama.chat({
-      model: config.model,
-      messages: ollamaMessages,
-      tools: ollamaTools,
-      stream: false,
-    })
-
-    let finalText = response.message.content || ""
+    const MAX_TOOL_ROUNDS = 3
+    let finalText = ""
     const toolResults: Array<{ toolName: string; result: unknown }> = []
+    const toolMessages = [...ollamaMessages]
 
-    // Step 2: resolve tool calls — structured OR text-fallback
-    const structuredCalls = response.message.tool_calls ?? []
-    const textFallback =
-      structuredCalls.length === 0 ? extractToolCallFromText(finalText) : null
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const response = await ollama.chat({
+        model: config.model,
+        messages: toolMessages,
+        tools: ollamaTools,
+        stream: false,
+      })
 
-    const hasCalls = structuredCalls.length > 0 || textFallback !== null
+      const structuredCalls = response.message.tool_calls ?? []
+      const responseText = response.message.content || ""
+      const textFallback =
+        structuredCalls.length === 0 ? extractToolCallFromText(responseText) : null
+      const hasCalls = structuredCalls.length > 0 || textFallback !== null
 
-    if (hasCalls) {
-      const toolMessages = [...ollamaMessages, response.message]
+      if (!hasCalls) {
+        // Model is done — no tool calls this round
+        finalText = responseText
+        break
+      }
+
+      // Append the model's turn before executing tools
+      toolMessages.push(response.message)
 
       const callsToRun: Array<{ name: string; args: Record<string, unknown> }> =
         structuredCalls.length > 0
@@ -254,35 +303,31 @@ export async function POST(req: NextRequest) {
           toolResult = { error: String(err) }
         }
 
+        console.log(`[tool:${call.name}] round=${round}`, JSON.stringify(toolResult).slice(0, 200))
         toolResults.push({ toolName: call.name, result: toolResult })
         toolMessages.push({
           role: "tool" as const,
           content: JSON.stringify(toolResult),
         })
       }
+    }
 
-      // Step 3: final human-readable summary
-      const finalResponse = await ollama.chat({
+    // Always generate a clean summary when tools were called.
+    // Prevents JSON bleed, enforces no-execution-claim rule,
+    // and produces a proper combined sentence for multi-step flows.
+    if (toolResults.length > 0) {
+      const summaryResponse = await ollama.chat({
         model: config.model,
         messages: [
           ...toolMessages,
           {
             role: "user" as const,
-            content:
-              "Write a single plain-English sentence summarising the tool result for the user. " +
-              "Do NOT include JSON, tool names, or parameter objects. " +
-              "Do NOT say a transaction was executed, initiated, sent, or confirmed — it was not. " +
-              "Do NOT add any parenthetical notes about your own reasoning or rule-following. " +
-              "If the result contains an 'error' field, explain what went wrong in one sentence. " +
-              "If the result is a swap_intent, say only: 'Here is your swap quote for [amount] [fromToken] → [toToken].' " +
-              "If the result is a kamino_deposit_intent, say only: 'Here is your Kamino deposit preview for [amount] [token].' " +
-              "If the result is a portfolio, say only: 'Your wallet holds [X] SOL and [N] token type(s).'",
+            content: buildSummaryPrompt(toolResults),
           },
         ],
         stream: false,
       })
-
-      finalText = finalResponse.message.content || ""
+      finalText = summaryResponse.message.content || ""
     }
 
     finalText = cleanModelText(finalText)
@@ -292,11 +337,9 @@ export async function POST(req: NextRequest) {
     const stream = new ReadableStream({
       start(controller) {
         controller.enqueue(encoder.encode(`0:${JSON.stringify(finalText)}\n`))
-
         if (toolResults.length > 0) {
           controller.enqueue(encoder.encode(`8:${JSON.stringify(toolResults)}\n`))
         }
-
         controller.close()
       },
     })
@@ -346,13 +389,21 @@ TOOL CALL RULES:
 - For vague messages — ask a clarifying question, NO tools
 - If user says "yes", "confirm", "do it" after seeing a card — tell them to click the Confirm button
 
-CHAINING GUIDANCE:
-- If user says "swap X then deposit it" — call swap_tokens first; tell them to confirm the swap, then you can prepare the deposit
-- If user says "what's the best yield?" — ask what token they want to deposit, then call deposit_for_yield
+MULTI-STEP CHAINING RULES:
+- If the user message contains BOTH a swap intent AND a deposit intent (e.g. "swap 1 SOL to USDC then deposit it"):
+  call swap_tokens FIRST with the correct tokens and amount.
+  Then immediately call deposit_for_yield using the swap's OUTPUT token as the deposit token.
+  Example: "swap 1 SOL to USDC then deposit it" → swap_tokens(SOL→USDC, 1) then deposit_for_yield(token=USDC, amount=1).
+  NEVER call deposit_for_yield without an explicit token — always infer it from the swap output token.
+  Do NOT wait for confirmation between them — both intents are explicit in the message.
+- If the user says "swap X to USDC and put it in Kamino" — same as above, deposit token = USDC.
+- If the user says "check my portfolio then swap" — call get_portfolio first, then swap_tokens.
+- Always resolve ALL explicit intents from a single user message before writing your response.
 
 RESPONSE FORMAT:
 - After get_portfolio: one sentence — SOL balance and token count only
 - After swap_tokens: one sentence — "Here is your swap quote for [X] [TOKEN] → [TOKEN]."
 - After deposit_for_yield: one sentence — "Here is your Kamino deposit preview for [X] [TOKEN]."
+- After multiple tools in one message: one sentence per action, in order called
 - After an error: one sentence explaining what went wrong`
 }

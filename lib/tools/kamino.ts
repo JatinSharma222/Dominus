@@ -58,6 +58,12 @@ export async function executeKaminoDeposit({
   token: string
   amount: number
 }): Promise<KaminoDepositIntent> {
+  // Guard: model sometimes omits token when chaining ("deposit it").
+  // Default to USDC — the most common swap output and Kamino deposit token.
+  if (!token || typeof token !== "string" || token.trim() === "") {
+    token = "USDC"
+  }
+
   const upper = token.toUpperCase()
   const tokenInfo = KAMINO_TOKENS[upper]
 
