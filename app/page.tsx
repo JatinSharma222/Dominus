@@ -41,7 +41,7 @@ export default function Home() {
     }),
   }
 
-  const { messages, append, isLoading } = useChat({
+  const { messages, append, isLoading, setMessages } = useChat({
     api: "/api/chat",
     body: chatBody,
   })
@@ -49,7 +49,6 @@ export default function Home() {
   // Build typed messages — parse toolInvocations from SDK (Anthropic/OpenAI path)
   // or from message.annotations (Ollama path — tool results sent via 8: stream)
   const typedMessages = messages.map((m) => {
-    // Extract text content
     let content = ""
     if (typeof m.content === "string") {
       content = m.content
@@ -60,7 +59,6 @@ export default function Home() {
         .join("")
     }
 
-    // Try SDK-native toolInvocations first (Anthropic/OpenAI path)
     let toolInvocations:
       | {
           toolName: string
@@ -69,15 +67,12 @@ export default function Home() {
         }[]
       | undefined = m.toolInvocations as typeof toolInvocations
 
-    // Fallback: parse annotations from Ollama path (8: stream → message.annotations)
     if (!toolInvocations?.length && m.annotations?.length) {
       const annotationTools = (m.annotations as unknown[]).filter(
         (a): a is { toolName: string; result: unknown } =>
           typeof a === "object" && a !== null && "toolName" in a
       )
-
       if (annotationTools.length) {
-        console.log("[page] annotation tool results:", JSON.stringify(annotationTools, null, 2))
         toolInvocations = annotationTools.map((a) => ({
           toolName: a.toolName,
           state: "result" as const,
@@ -102,10 +97,30 @@ export default function Home() {
     }
   }, [input])
 
+  // Inject two client-side messages without hitting the API
+  function showWalletWarning(userText: string) {
+    const id1 = `local-${Date.now()}-u`
+    const id2 = `local-${Date.now()}-a`
+    setMessages([
+      ...messages,
+      { id: id1, role: "user", content: userText },
+      {
+        id: id2,
+        role: "assistant",
+        content:
+          "Please connect your wallet first — click the CONNECT WALLET button in the top right to get started.",
+      },
+    ])
+  }
+
   async function handleSend() {
     const trimmed = input.trim()
     if (!trimmed || isLoading) return
     setInput("")
+    if (!connected || !publicKey) {
+      showWalletWarning(trimmed)
+      return
+    }
     await append({ role: "user", content: trimmed })
   }
 
@@ -118,6 +133,10 @@ export default function Home() {
 
   async function handleSuggestion(prompt: string) {
     if (isLoading) return
+    if (!connected || !publicKey) {
+      showWalletWarning(prompt)
+      return
+    }
     await append({ role: "user", content: prompt })
   }
 
@@ -185,12 +204,7 @@ export default function Home() {
       {/* ── Suggestion Chips (show only when no messages) ── */}
       {messages.length === 0 && (
         <div className="flex gap-2 px-6 pb-3 flex-wrap justify-center shrink-0">
-          {[
-            "Swap SOL → USDC",
-            "Check Portfolio",
-            "Stake SOL",
-            "Best Yield Now",
-          ].map((chip) => (
+          {["Swap SOL → USDC", "Check Portfolio", "Stake SOL", "Best Yield Now"].map((chip) => (
             <button
               key={chip}
               onClick={() => handleSuggestion(chip)}
@@ -204,13 +218,23 @@ export default function Home() {
 
       {/* ── Input Bar ── */}
       <div className="px-6 pb-6 pt-2 shrink-0">
-        <div className="relative flex items-end gap-3 bg-surface-container-lowest rounded-lg px-4 py-3 focus-within:shadow-[0_0_0_1px_rgba(255,193,116,0.3)] transition-all">
+        <div
+          className={`relative flex items-end gap-3 rounded-lg px-4 py-3 transition-all ${
+            connected
+              ? "bg-surface-container-lowest focus-within:shadow-[0_0_0_1px_rgba(255,193,116,0.3)]"
+              : "bg-surface-container-lowest opacity-60"
+          }`}
+        >
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Describe what you want to do with your crypto..."
+            placeholder={
+              connected
+                ? "Describe what you want to do with your crypto..."
+                : "Connect your wallet to get started..."
+            }
             rows={1}
             className="flex-1 bg-transparent font-body text-sm text-on-surface placeholder:text-neutral-600 resize-none outline-none leading-relaxed max-h-40 overflow-y-auto"
           />
@@ -223,16 +247,22 @@ export default function Home() {
           </button>
         </div>
         <p className="text-center font-label text-[9px] text-neutral-600 tracking-widest uppercase mt-2">
-          DOMINUS NEVER EXECUTES WITHOUT YOUR CONFIRMATION
+          {connected
+            ? "DOMINUS NEVER EXECUTES WITHOUT YOUR CONFIRMATION"
+            : "CONNECT WALLET TO BEGIN"}
         </p>
       </div>
 
       {/* ── Bottom Status Bar ── */}
       <div className="h-10 flex items-center justify-between px-8 bg-neutral-950/80 backdrop-blur-md border-t border-white/10 shrink-0">
         <div className="flex items-center gap-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              connected ? "bg-primary animate-pulse" : "bg-neutral-600"
+            }`}
+          />
           <span className="font-label text-[9px] text-neutral-400 tracking-[0.2em] uppercase">
-            {connected ? "Wallet Connected" : "Core Prime Online"}
+            {connected ? "Wallet Connected" : "Wallet Not Connected"}
           </span>
           <span className="h-3 w-px bg-white/10" />
           <span className="font-label text-[9px] text-neutral-600 tracking-[0.15em] uppercase">
