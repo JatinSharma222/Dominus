@@ -3,8 +3,10 @@
 import { Message } from "@/lib/types"
 import { JupiterSwapIntent } from "@/lib/tools/jupiter"
 import { KaminoDepositIntent } from "@/lib/tools/kamino"
+import { JitoStakeIntent } from "@/lib/tools/jito"
 import TxConfirmCard from "./TxConfirmCard"
 import KaminoDepositCard from "./KaminoDepositCard"
+import JitoStakeCard from "./JitoStakeCard"
 
 interface ToolInvocation {
   toolName: string
@@ -33,6 +35,14 @@ function isKaminoDepositIntent(result: unknown): result is KaminoDepositIntent {
   )
 }
 
+function isJitoStakeIntent(result: unknown): result is JitoStakeIntent {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as Record<string, unknown>).type === "jito_stake_intent"
+  )
+}
+
 const toolLabels: Record<string, string> = {
   get_portfolio:         "Reading wallet balances...",
   swap_tokens:           "Resolving swap route via Jupiter...",
@@ -56,6 +66,10 @@ export default function MessageBubble({ message, isLoading }: MessageBubbleProps
   const kaminoDepositIntents = (message.toolInvocations ?? [])
     .filter((t) => t.state === "result" && isKaminoDepositIntent(t.result))
     .map((t) => t.result as KaminoDepositIntent)
+
+  const jitoStakeIntents = (message.toolInvocations ?? [])
+    .filter((t) => t.state === "result" && isJitoStakeIntent(t.result))
+    .map((t) => t.result as JitoStakeIntent)
 
   if (isAI) {
     return (
@@ -104,6 +118,16 @@ export default function MessageBubble({ message, isLoading }: MessageBubbleProps
               intent={intent}
               onSuccess={(txid) => console.log("Kamino deposit confirmed:", txid)}
               onCancel={() => console.log("Kamino deposit cancelled")}
+            />
+          ))}
+
+          {/* Jito stake cards */}
+          {jitoStakeIntents.map((intent, i) => (
+            <JitoStakeCard
+              key={`jito-${i}`}
+              intent={intent}
+              onSuccess={(txid) => console.log("Jito stake confirmed:", txid)}
+              onCancel={() => console.log("Jito stake cancelled")}
             />
           ))}
 

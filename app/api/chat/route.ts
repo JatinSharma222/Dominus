@@ -10,6 +10,7 @@ import { allTools } from "@/lib/tools"
 import { executePortfolioRead } from "@/lib/tools/portfolio"
 import { executeJupiterSwap } from "@/lib/tools/jupiter"
 import { executeKaminoDeposit } from "@/lib/tools/kamino"
+import { executeJitoStake } from "@/lib/tools/jito"
 
 export const maxDuration = 60
 
@@ -24,6 +25,8 @@ const toolExecutors: Record<string, (args: Record<string, unknown>) => Promise<u
     ),
   deposit_for_yield: (args) =>
     executeKaminoDeposit(args as { token: string; amount: number }),
+  stake_sol: (args) =>
+    executeJitoStake(args as { amount: number }),
 }
 
 // ─── Fallback: extract tool call from plain-text model output ─────────────────
@@ -63,8 +66,6 @@ function cleanModelText(text: string): string {
 }
 
 // ─── Summary prompt builder ───────────────────────────────────────────────────
-// Generates a tailored summary instruction based on which tools were called.
-// Multi-tool calls get a combined sentence per result.
 
 function buildSummaryPrompt(toolResults: Array<{ toolName: string; result: unknown }>): string {
   const instructions = toolResults.map(({ toolName, result }) => {
@@ -78,6 +79,8 @@ function buildSummaryPrompt(toolResults: Array<{ toolName: string; result: unkno
         return "For the swap: say exactly 'Here is your swap quote for [amount] [fromToken] → [toToken].' filling in real values."
       case "deposit_for_yield":
         return "For the deposit: say exactly 'Here is your Kamino deposit preview for [amount] [token].' filling in real values."
+      case "stake_sol":
+        return "For the stake: say exactly 'Here is your Jito liquid stake preview for [amount] SOL.' filling in real values."
       default:
         return `For ${toolName}: summarise the result in one plain-English sentence.`
     }
@@ -124,9 +127,6 @@ export async function POST(req: NextRequest) {
   try {
     const { messages, walletAddress, llmOverride } = await req.json()
 
-    // Map the client-side llmOverride shape → getLLMConfig overrides
-    // Ollama:   { provider, baseUrl, model }
-    // Hosted:   { provider, apiKey, model }
     const config = getLLMConfig(
       llmOverride
         ? {
@@ -148,7 +148,6 @@ export async function POST(req: NextRequest) {
     if (lastUserMessage) {
       const text = lastUserMessage.content.trim().toLowerCase()
 
-      // Greeting → reply directly, never touch tools
       const greetingPatterns = [
         /^(hello|hi|hey|sup|yo|howdy|greetings|good\s+(morning|afternoon|evening))[\s!?.]*$/,
         /^what['']?s\s+up[\s!?.]*$/,
@@ -156,13 +155,12 @@ export async function POST(req: NextRequest) {
       ]
       if (greetingPatterns.some((p) => p.test(text))) {
         return makeTextStream(
-          "Hello! I'm Dominus, your Solana DeFi agent. I can check your portfolio, get swap quotes, deposit tokens to earn yield on Kamino, and more. What would you like to do?"
+          "Hello! I'm Dominus, your Solana DeFi agent. I can check your portfolio, get swap quotes, deposit tokens to earn yield on Kamino, liquid stake SOL with Jito, and more. What would you like to do?"
         )
       }
 
-      // Confirmation after a quote → tell user to click the button
       const confirmPatterns = [
-        /^(yes|yeah|yep|ok|okay|sure|confirm|do it|go ahead|initiate|execute|proceed|looks good|do the swap|make it happen|deposit it|do the deposit)[\s!?.]*$/,
+        /^(yes|yeah|yep|ok|okay|sure|confirm|do it|go ahead|initiate|execute|proceed|looks good|do the swap|make it happen|deposit it|do the deposit|stake it|do the stake)[\s!?.]*$/,
       ]
       if (confirmPatterns.some((p) => p.test(text))) {
         return makeTextStream(
@@ -191,9 +189,6 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Ollama: agentic tool loop with text-fallback ──────────────────────────
-    // Each round: model responds → execute any tool calls → append results → repeat.
-    // Loop exits when model returns text with no tool calls (it's done),
-    // or MAX_TOOL_ROUNDS is reached. A clean summary call always follows.
 
     const ollama = new Ollama({ host: config.baseUrl || "http://localhost:11434" })
 
@@ -252,6 +247,20 @@ export async function POST(req: NextRequest) {
           },
         },
       },
+      {
+        type: "function",
+        function: {
+          name: "stake_sol",
+          description: allTools.stake_sol.description,
+          parameters: {
+            type: "object",
+            properties: {
+              amount: { type: "number", description: "Amount of SOL to liquid stake with Jito" },
+            } as Record<string, { type?: string; description?: string }>,
+            required: ["amount"],
+          },
+        },
+      },
     ]
 
     const MAX_TOOL_ROUNDS = 3
@@ -274,12 +283,10 @@ export async function POST(req: NextRequest) {
       const hasCalls = structuredCalls.length > 0 || textFallback !== null
 
       if (!hasCalls) {
-        // Model is done — no tool calls this round
         finalText = responseText
         break
       }
 
-      // Append the model's turn before executing tools
       toolMessages.push(response.message)
 
       const callsToRun: Array<{ name: string; args: Record<string, unknown> }> =
@@ -312,9 +319,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Always generate a clean summary when tools were called.
-    // Prevents JSON bleed, enforces no-execution-claim rule,
-    // and produces a proper combined sentence for multi-step flows.
     if (toolResults.length > 0) {
       const summaryResponse = await ollama.chat({
         model: config.model,
@@ -332,7 +336,6 @@ export async function POST(req: NextRequest) {
 
     finalText = cleanModelText(finalText)
 
-    // Stream text + tool result annotations
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
       start(controller) {
@@ -370,13 +373,14 @@ function buildSystemPrompt(walletAddress?: string): string {
 
 ${walletLine}
 
-You have three tools:
+You have four tools:
 - get_portfolio: reads wallet balances and token holdings
 - swap_tokens: prepares a Jupiter swap quote (does NOT execute any transaction)
 - deposit_for_yield: prepares a Kamino lending deposit preview (does NOT execute any transaction)
+- stake_sol: prepares a Jito liquid stake preview — stake SOL, receive jitoSOL, earn ~8% APY (does NOT execute any transaction)
 
 CRITICAL — NEVER DO THESE:
-- NEVER say a swap or deposit was "initiated", "executed", "sent", "completed", or "confirmed"
+- NEVER say a swap, deposit, or stake was "initiated", "executed", "sent", "completed", or "confirmed"
 - NEVER claim to have performed any on-chain action
 - NEVER add parenthetical self-commentary like "(I corrected..." or "(Note: I didn't..."
 - NEVER print JSON, tool names, or parameter objects in your response
@@ -384,10 +388,17 @@ CRITICAL — NEVER DO THESE:
 TOOL CALL RULES:
 - ONLY call get_portfolio if the user explicitly asks about balance, portfolio, holdings, or tokens
 - ONLY call swap_tokens if the user explicitly asks to swap/trade/convert with a specific amount and tokens
-- ONLY call deposit_for_yield if the user explicitly asks to deposit/earn yield/lend tokens
+- ONLY call deposit_for_yield if the user explicitly asks to deposit/earn yield/lend tokens with Kamino
+- ONLY call stake_sol if the user explicitly asks to stake SOL, get jitoSOL, or earn staking yield on SOL
 - For greetings — respond with a short greeting, NO tools
 - For vague messages — ask a clarifying question, NO tools
-- If user says "yes", "confirm", "do it" after seeing a card — tell them to click the Confirm button
+- If user says "yes", "confirm", "do it", "stake it" after seeing a card — tell them to click the Confirm button
+
+CHOOSING BETWEEN KAMINO AND JITO:
+- stake_sol is ONLY for SOL → jitoSOL liquid staking (validator rewards + MEV tips)
+- deposit_for_yield is for USDC, USDT, SOL, mSOL, BSOL, BONK into Kamino lending markets
+- If the user says "earn yield on SOL" without specifying Jito/Kamino — prefer stake_sol (higher APY, simpler)
+- If the user says "lend SOL" or "deposit SOL to Kamino" — use deposit_for_yield with token=SOL
 
 MULTI-STEP CHAINING RULES:
 - If the user message contains BOTH a swap intent AND a deposit intent (e.g. "swap 1 SOL to USDC then deposit it"):
@@ -404,6 +415,7 @@ RESPONSE FORMAT:
 - After get_portfolio: one sentence — SOL balance and token count only
 - After swap_tokens: one sentence — "Here is your swap quote for [X] [TOKEN] → [TOKEN]."
 - After deposit_for_yield: one sentence — "Here is your Kamino deposit preview for [X] [TOKEN]."
+- After stake_sol: one sentence — "Here is your Jito liquid stake preview for [X] SOL."
 - After multiple tools in one message: one sentence per action, in order called
 - After an error: one sentence explaining what went wrong`
 }
