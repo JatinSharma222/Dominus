@@ -2,6 +2,7 @@ import { portfolioTool, executePortfolioRead } from "./portfolio"
 import { jupiterSwapTool, executeJupiterSwap } from "./jupiter"
 import { kaminoDepositTool, executeKaminoDeposit } from "./kamino"
 import { jitoStakeTool, executeJitoStake } from "./jito"
+import { streamflowPaymentTool, executeStreamflowPayment } from "./streamflow"
 
 export const allTools = {
   get_portfolio: {
@@ -19,5 +20,9 @@ export const allTools = {
   stake_sol: {
     ...jitoStakeTool,
     execute: executeJitoStake,
+  },
+  create_payment_stream: {
+    ...streamflowPaymentTool,
+    execute: executeStreamflowPayment,
   },
 }

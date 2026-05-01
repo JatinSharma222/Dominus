@@ -4,9 +4,11 @@ import { Message } from "@/lib/types"
 import { JupiterSwapIntent } from "@/lib/tools/jupiter"
 import { KaminoDepositIntent } from "@/lib/tools/kamino"
 import { JitoStakeIntent } from "@/lib/tools/jito"
+import { StreamflowPaymentIntent } from "@/lib/tools/streamflow"
 import TxConfirmCard from "./TxConfirmCard"
 import KaminoDepositCard from "./KaminoDepositCard"
 import JitoStakeCard from "./JitoStakeCard"
+import StreamflowPaymentCard from "./StreamflowPaymentCard"
 
 interface ToolInvocation {
   toolName: string
@@ -43,6 +45,14 @@ function isJitoStakeIntent(result: unknown): result is JitoStakeIntent {
   )
 }
 
+function isStreamflowPaymentIntent(result: unknown): result is StreamflowPaymentIntent {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as Record<string, unknown>).type === "streamflow_payment_intent"
+  )
+}
+
 const toolLabels: Record<string, string> = {
   get_portfolio:         "Reading wallet balances...",
   swap_tokens:           "Resolving swap route via Jupiter...",
@@ -70,6 +80,10 @@ export default function MessageBubble({ message, isLoading }: MessageBubbleProps
   const jitoStakeIntents = (message.toolInvocations ?? [])
     .filter((t) => t.state === "result" && isJitoStakeIntent(t.result))
     .map((t) => t.result as JitoStakeIntent)
+
+  const streamflowPaymentIntents = (message.toolInvocations ?? [])
+    .filter((t) => t.state === "result" && isStreamflowPaymentIntent(t.result))
+    .map((t) => t.result as StreamflowPaymentIntent)
 
   if (isAI) {
     return (
@@ -128,6 +142,16 @@ export default function MessageBubble({ message, isLoading }: MessageBubbleProps
               intent={intent}
               onSuccess={(txid) => console.log("Jito stake confirmed:", txid)}
               onCancel={() => console.log("Jito stake cancelled")}
+            />
+          ))}
+
+          {/* Streamflow payment cards */}
+          {streamflowPaymentIntents.map((intent, i) => (
+            <StreamflowPaymentCard
+              key={`streamflow-${i}`}
+              intent={intent}
+              onSuccess={(streamId: string) => console.log("Streamflow stream created:", streamId)}
+              onCancel={() => console.log("Streamflow stream cancelled")}
             />
           ))}
 

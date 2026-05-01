@@ -11,6 +11,7 @@ import { executePortfolioRead } from "@/lib/tools/portfolio"
 import { executeJupiterSwap } from "@/lib/tools/jupiter"
 import { executeKaminoDeposit } from "@/lib/tools/kamino"
 import { executeJitoStake } from "@/lib/tools/jito"
+import { executeStreamflowPayment } from "@/lib/tools/streamflow"
 
 export const maxDuration = 60
 
@@ -27,6 +28,16 @@ const toolExecutors: Record<string, (args: Record<string, unknown>) => Promise<u
     executeKaminoDeposit(args as { token: string; amount: number }),
   stake_sol: (args) =>
     executeJitoStake(args as { amount: number }),
+  create_payment_stream: (args) =>
+    executeStreamflowPayment(
+      args as {
+        recipient:       string
+        token:           string
+        amountPerPeriod: number
+        frequency:       "daily" | "weekly" | "monthly"
+        totalPeriods?:   number
+      }
+    ),
 }
 
 // ─── Fallback: extract tool call from plain-text model output ─────────────────
@@ -81,6 +92,8 @@ function buildSummaryPrompt(toolResults: Array<{ toolName: string; result: unkno
         return "For the deposit: say exactly 'Here is your Kamino deposit preview for [amount] [token].' filling in real values."
       case "stake_sol":
         return "For the stake: say exactly 'Here is your Jito liquid stake preview for [amount] SOL.' filling in real values."
+      case "create_payment_stream":
+        return "For the payment stream: say exactly 'Here is your Streamflow payment stream for [amountPerPeriod] [token] [frequency] to [recipient shortened to first 4 + last 4 chars].' filling in real values."
       default:
         return `For ${toolName}: summarise the result in one plain-English sentence.`
     }
@@ -155,12 +168,12 @@ export async function POST(req: NextRequest) {
       ]
       if (greetingPatterns.some((p) => p.test(text))) {
         return makeTextStream(
-          "Hello! I'm Dominus, your Solana DeFi agent. I can check your portfolio, get swap quotes, deposit tokens to earn yield on Kamino, liquid stake SOL with Jito, and more. What would you like to do?"
+          "Hello! I'm Dominus, your Solana DeFi agent. I can check your portfolio, get swap quotes, deposit tokens to earn yield on Kamino, liquid stake SOL with Jito, and set up recurring payment streams with Streamflow. What would you like to do?"
         )
       }
 
       const confirmPatterns = [
-        /^(yes|yeah|yep|ok|okay|sure|confirm|do it|go ahead|initiate|execute|proceed|looks good|do the swap|make it happen|deposit it|do the deposit|stake it|do the stake)[\s!?.]*$/,
+        /^(yes|yeah|yep|ok|okay|sure|confirm|do it|go ahead|initiate|execute|proceed|looks good|do the swap|make it happen|deposit it|do the deposit|stake it|do the stake|create it|send it)[\s!?.]*$/,
       ]
       if (confirmPatterns.some((p) => p.test(text))) {
         return makeTextStream(
@@ -258,6 +271,24 @@ export async function POST(req: NextRequest) {
               amount: { type: "number", description: "Amount of SOL to liquid stake with Jito" },
             } as Record<string, { type?: string; description?: string }>,
             required: ["amount"],
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
+          name: "create_payment_stream",
+          description: allTools.create_payment_stream.description,
+          parameters: {
+            type: "object",
+            properties: {
+              recipient:       { type: "string", description: "Recipient's Solana wallet public key (base58). Required." },
+              token:           { type: "string", description: "Token symbol to stream: USDC, USDT, or SOL. Default: USDC." },
+              amountPerPeriod: { type: "number", description: "Amount of tokens to release per period." },
+              frequency:       { type: "string", description: "Release frequency: 'daily', 'weekly', or 'monthly'." },
+              totalPeriods:    { type: "number", description: "Total number of periods. Optional — defaults to 30/12/6 for daily/weekly/monthly." },
+            } as Record<string, { type?: string; description?: string }>,
+            required: ["recipient", "amountPerPeriod", "frequency"],
           },
         },
       },
@@ -373,14 +404,15 @@ function buildSystemPrompt(walletAddress?: string): string {
 
 ${walletLine}
 
-You have four tools:
+You have five tools:
 - get_portfolio: reads wallet balances and token holdings
 - swap_tokens: prepares a Jupiter swap quote (does NOT execute any transaction)
 - deposit_for_yield: prepares a Kamino lending deposit preview (does NOT execute any transaction)
 - stake_sol: prepares a Jito liquid stake preview — stake SOL, receive jitoSOL, earn ~8% APY (does NOT execute any transaction)
+- create_payment_stream: prepares a Streamflow recurring payment stream preview (does NOT execute any transaction)
 
 CRITICAL — NEVER DO THESE:
-- NEVER say a swap, deposit, or stake was "initiated", "executed", "sent", "completed", or "confirmed"
+- NEVER say a swap, deposit, stake, or stream was "initiated", "executed", "sent", "completed", or "confirmed"
 - NEVER claim to have performed any on-chain action
 - NEVER add parenthetical self-commentary like "(I corrected..." or "(Note: I didn't..."
 - NEVER print JSON, tool names, or parameter objects in your response
@@ -390,15 +422,22 @@ TOOL CALL RULES:
 - ONLY call swap_tokens if the user explicitly asks to swap/trade/convert with a specific amount and tokens
 - ONLY call deposit_for_yield if the user explicitly asks to deposit/earn yield/lend tokens with Kamino
 - ONLY call stake_sol if the user explicitly asks to stake SOL, get jitoSOL, or earn staking yield on SOL
+- ONLY call create_payment_stream if the user explicitly asks to send recurring/scheduled/streaming payments
 - For greetings — respond with a short greeting, NO tools
 - For vague messages — ask a clarifying question, NO tools
-- If user says "yes", "confirm", "do it", "stake it" after seeing a card — tell them to click the Confirm button
+- If user says "yes", "confirm", "do it", "stake it", "create it" after seeing a card — tell them to click the Confirm button
 
 CHOOSING BETWEEN KAMINO AND JITO:
 - stake_sol is ONLY for SOL → jitoSOL liquid staking (validator rewards + MEV tips)
 - deposit_for_yield is for USDC, USDT, SOL, mSOL, BSOL, BONK into Kamino lending markets
 - If the user says "earn yield on SOL" without specifying Jito/Kamino — prefer stake_sol (higher APY, simpler)
 - If the user says "lend SOL" or "deposit SOL to Kamino" — use deposit_for_yield with token=SOL
+
+PAYMENT STREAM RULES:
+- create_payment_stream requires a recipient wallet address — if the user hasn't provided one, ask for it before calling the tool
+- If the user says "send $50 USDC weekly to [address]" — call create_payment_stream with recipient, token=USDC, amountPerPeriod=50, frequency=weekly
+- If no token is specified, default to USDC
+- If no frequency is specified, ask the user — do not guess
 
 MULTI-STEP CHAINING RULES:
 - If the user message contains BOTH a swap intent AND a deposit intent (e.g. "swap 1 SOL to USDC then deposit it"):
@@ -416,6 +455,7 @@ RESPONSE FORMAT:
 - After swap_tokens: one sentence — "Here is your swap quote for [X] [TOKEN] → [TOKEN]."
 - After deposit_for_yield: one sentence — "Here is your Kamino deposit preview for [X] [TOKEN]."
 - After stake_sol: one sentence — "Here is your Jito liquid stake preview for [X] SOL."
+- After create_payment_stream: one sentence — "Here is your Streamflow payment stream for [X] [TOKEN] [frequency] to [shortened address]."
 - After multiple tools in one message: one sentence per action, in order called
 - After an error: one sentence explaining what went wrong`
 }
