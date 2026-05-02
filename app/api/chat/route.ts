@@ -78,26 +78,17 @@ function cleanModelText(text: string): string {
 
 // ─── Proactive suggestion engine ──────────────────────────────────────────────
 
-// Mint addresses for known stablecoins
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
 const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
 
-// Thresholds — keep these conservative so suggestions feel useful, not spammy
-const MIN_SOL_FOR_STAKE_SUGGESTION    = 0.5   // SOL
-const MIN_STABLE_FOR_YIELD_SUGGESTION = 10    // USD equivalent
+const MIN_SOL_FOR_STAKE_SUGGESTION    = 0.5
+const MIN_STABLE_FOR_YIELD_SUGGESTION = 10
 
 interface PortfolioResult {
   solBalance?: number
   tokens?: Array<{ mint: string; amount: number }>
 }
 
-/**
- * Inspects a get_portfolio result and returns a single proactive suggestion
- * string, or null if nothing meaningful to suggest.
- *
- * Priority: SOL staking > stablecoin yield
- * (SOL staking is simpler and has higher APY for the average user)
- */
 function buildProactiveSuggestion(portfolio: PortfolioResult): string | null {
   const solBalance = portfolio.solBalance ?? 0
   const tokens     = portfolio.tokens ?? []
@@ -105,7 +96,6 @@ function buildProactiveSuggestion(portfolio: PortfolioResult): string | null {
   const usdcAmount = tokens.find((t) => t.mint === USDC_MINT)?.amount ?? 0
   const usdtAmount = tokens.find((t) => t.mint === USDT_MINT)?.amount ?? 0
 
-  // Prefer the larger stable balance for the suggestion
   const stableToken  = usdcAmount >= usdtAmount ? "USDC" : "USDT"
   const stableAmount = Math.max(usdcAmount, usdtAmount)
 
@@ -134,8 +124,14 @@ function buildSummaryPrompt(toolResults: Array<{ toolName: string; result: unkno
     if (r?.error) return `For the ${toolName} error: explain what went wrong in one sentence.`
 
     switch (toolName) {
-      case "get_portfolio":
-        return "For the portfolio: say exactly 'Your wallet holds [X] SOL and [N] token type(s).' filling in real values."
+      case "get_portfolio": {
+        // If prices were fetched successfully, direct the model to use the
+        // pre-built summary string which contains all USD values.
+        const hasPrices = r?.hasPrices === true
+        return hasPrices
+          ? `For the portfolio: read the "summary" field from the result — it contains the exact SOL balance with USD value, token balances with USD values, and total portfolio value. Report these numbers accurately in 1-2 natural English sentences. Include the USD values.`
+          : `For the portfolio: say exactly 'Your wallet holds [X] SOL and [N] token type(s).' filling in real values.`
+      }
       case "swap_tokens":
         return "For the swap: say exactly 'Here is your swap quote for [amount] [fromToken] → [toToken].' filling in real values."
       case "deposit_for_yield":
@@ -418,10 +414,6 @@ export async function POST(req: NextRequest) {
     finalText = cleanModelText(finalText)
 
     // ── Proactive suggestion (Ollama path) ────────────────────────────────────
-    // After a portfolio read, inspect the result and append a suggestion if
-    // there are idle assets worth acting on. We append it ourselves rather
-    // than asking the model to generate it — keeps it deterministic and
-    // prevents the model from mangling or omitting it.
     const portfolioToolResult = toolResults.find((r) => r.toolName === "get_portfolio")
     if (portfolioToolResult && !(portfolioToolResult.result as Record<string, unknown>)?.error) {
       const suggestion = buildProactiveSuggestion(
@@ -470,7 +462,7 @@ function buildSystemPrompt(walletAddress?: string): string {
 ${walletLine}
 
 You have five tools:
-- get_portfolio: reads wallet balances and token holdings
+- get_portfolio: reads wallet balances and token holdings including live USD prices
 - swap_tokens: prepares a Jupiter swap quote (does NOT execute any transaction)
 - deposit_for_yield: prepares a Kamino lending deposit preview (does NOT execute any transaction)
 - stake_sol: prepares a Jito liquid stake preview — stake SOL, receive jitoSOL, earn ~8% APY (does NOT execute any transaction)
@@ -522,7 +514,7 @@ After calling get_portfolio, inspect the returned data and add ONE suggestion if
 - Only suggest one thing. Do not suggest if balances are below the thresholds. Do not suggest if the user already has an active action card.
 
 RESPONSE FORMAT:
-- After get_portfolio: one sentence — SOL balance and token count only — then one proactive suggestion line if applicable
+- After get_portfolio: report the SOL balance with USD value (e.g. "0.2425 SOL worth $20.37"), total portfolio value in USD if available, and token count — then one proactive suggestion line if applicable
 - After swap_tokens: one sentence — "Here is your swap quote for [X] [TOKEN] → [TOKEN]."
 - After deposit_for_yield: one sentence — "Here is your Kamino deposit preview for [X] [TOKEN]."
 - After stake_sol: one sentence — "Here is your Jito liquid stake preview for [X] SOL."
