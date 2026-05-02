@@ -10,7 +10,7 @@ import { z } from "zod"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-export const JITO_STAKE_POOL_ADDRESS = "Jito4APyf642JPeaT1dpaCyKNY8kYRTKFMRpDk7FtzRz"
+export const JITO_STAKE_POOL_ADDRESS = "Jito4APyf642JPZPx3hGc6WWJ8zPKtRbRs4P815Awbb"
 export const JITOSOL_MINT            = "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn"
 
 // ─── Types ────────────────────────────────────────────────────────────────────

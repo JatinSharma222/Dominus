@@ -1,25 +1,28 @@
-"use client"
+"use client";
 
-import { useChat } from "ai/react"
-import { useWallet } from "@solana/wallet-adapter-react"
-import { useWalletModal } from "@solana/wallet-adapter-react-ui"
-import { useState, useRef, useEffect } from "react"
-import ChatWindow from "@/components/ChatWindow"
-import LLMSettings, { LLMSettingsConfig, loadLLMConfig } from "@/components/LLMSettings"
-import { shortenAddress } from "@/lib/solana"
+import { useChat } from "ai/react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import { useState, useRef, useEffect } from "react";
+import ChatWindow from "@/components/ChatWindow";
+import LLMSettings, {
+  LLMSettingsConfig,
+  loadLLMConfig,
+} from "@/components/LLMSettings";
+import { shortenAddress } from "@/lib/solana";
 
 export default function Home() {
-  const { publicKey, disconnect, connected } = useWallet()
-  const { setVisible } = useWalletModal()
-  const [input, setInput] = useState("")
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [llmConfig, setLLMConfig] = useState<LLMSettingsConfig | null>(null)
+  const { publicKey, disconnect, connected } = useWallet();
+  const { setVisible } = useWalletModal();
+  const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [llmConfig, setLLMConfig] = useState<LLMSettingsConfig | null>(null);
 
   // Load LLM config from localStorage on mount (client-only)
   useEffect(() => {
-    setLLMConfig(loadLLMConfig())
-  }, [])
+    setLLMConfig(loadLLMConfig());
+  }, []);
 
   // Build the extra body fields sent with every chat request.
   // The chat route reads these to override the server-side env defaults.
@@ -39,45 +42,45 @@ export default function Home() {
               model: llmConfig.model || undefined,
             },
     }),
-  }
+  };
 
   const { messages, append, isLoading, setMessages } = useChat({
     api: "/api/chat",
     body: chatBody,
-  })
+  });
 
   // Build typed messages — parse toolInvocations from SDK (Anthropic/OpenAI path)
   // or from message.annotations (Ollama path — tool results sent via 8: stream)
   const typedMessages = messages.map((m) => {
-    let content = ""
+    let content = "";
     if (typeof m.content === "string") {
-      content = m.content
+      content = m.content;
     } else if (Array.isArray(m.content)) {
       content = (m.content as { type: string; text?: string }[])
         .filter((p) => p.type === "text" && p.text)
         .map((p) => p.text)
-        .join("")
+        .join("");
     }
 
     let toolInvocations:
       | {
-          toolName: string
-          state: "call" | "result" | "partial-call"
-          result?: unknown
+          toolName: string;
+          state: "call" | "result" | "partial-call";
+          result?: unknown;
         }[]
-      | undefined = m.toolInvocations as typeof toolInvocations
+      | undefined = m.toolInvocations as typeof toolInvocations;
 
     if (!toolInvocations?.length && m.annotations?.length) {
       const annotationTools = (m.annotations as unknown[]).filter(
         (a): a is { toolName: string; result: unknown } =>
-          typeof a === "object" && a !== null && "toolName" in a
-      )
+          typeof a === "object" && a !== null && "toolName" in a,
+      );
       if (annotationTools.length) {
         toolInvocations = annotationTools.map((a) => ({
           toolName: a.toolName,
           state: "result" as const,
           result: a.result,
-        }))
+        }));
       }
     }
 
@@ -86,21 +89,21 @@ export default function Home() {
       role: m.role as "user" | "assistant",
       content,
       toolInvocations,
-    }
-  })
+    };
+  });
 
   // Auto-resize textarea
   useEffect(() => {
     if (inputRef.current) {
-      inputRef.current.style.height = "auto"
-      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`
+      inputRef.current.style.height = "auto";
+      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
     }
-  }, [input])
+  }, [input]);
 
   // Inject two client-side messages without hitting the API
   function showWalletWarning(userText: string) {
-    const id1 = `local-${Date.now()}-u`
-    const id2 = `local-${Date.now()}-a`
+    const id1 = `local-${Date.now()}-u`;
+    const id2 = `local-${Date.now()}-a`;
     setMessages([
       ...messages,
       { id: id1, role: "user", content: userText },
@@ -110,39 +113,39 @@ export default function Home() {
         content:
           "Please connect your wallet first — click the CONNECT WALLET button in the top right to get started.",
       },
-    ])
+    ]);
   }
 
   async function handleSend() {
-    const trimmed = input.trim()
-    if (!trimmed || isLoading) return
-    setInput("")
+    const trimmed = input.trim();
+    if (!trimmed || isLoading) return;
+    setInput("");
     if (!connected || !publicKey) {
-      showWalletWarning(trimmed)
-      return
+      showWalletWarning(trimmed);
+      return;
     }
-    await append({ role: "user", content: trimmed })
+    await append({ role: "user", content: trimmed });
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
+      e.preventDefault();
+      handleSend();
     }
   }
 
   async function handleSuggestion(prompt: string) {
-    if (isLoading) return
+    if (isLoading) return;
     if (!connected || !publicKey) {
-      showWalletWarning(prompt)
-      return
+      showWalletWarning(prompt);
+      return;
     }
-    await append({ role: "user", content: prompt })
+    await append({ role: "user", content: prompt });
   }
 
   function handleSettingsSave(config: LLMSettingsConfig) {
-    setLLMConfig(config)
-    setIsSettingsOpen(false)
+    setLLMConfig(config);
+    setIsSettingsOpen(false);
   }
 
   // Derive display label for the active LLM in the status bar
@@ -151,11 +154,10 @@ export default function Home() {
       ? llmConfig.provider === "anthropic"
         ? `ANTHROPIC — ${llmConfig.model || "DEFAULT"}`
         : `OPENAI — ${llmConfig.model || "DEFAULT"}`
-      : `OLLAMA — ${llmConfig?.ollamaModel ?? "llama3.1:8b"}`
+      : `OLLAMA — ${llmConfig?.ollamaModel ?? "llama3.1:8b"}`;
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden">
-
       {/* ── Top Nav ── */}
       <nav className="h-16 flex items-center justify-between px-8 bg-neutral-950/40 backdrop-blur-xl border-b border-white/10 shrink-0">
         <span className="font-headline text-2xl font-bold tracking-tighter text-primary drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]">
@@ -204,7 +206,12 @@ export default function Home() {
       {/* ── Suggestion Chips (show only when no messages) ── */}
       {messages.length === 0 && (
         <div className="flex gap-2 px-6 pb-3 flex-wrap justify-center shrink-0">
-          {["Swap SOL → USDC", "Check Portfolio", "Stake SOL", "Best Yield Now"].map((chip) => (
+          {[
+            "Swap SOL → USDC",
+            "Check Portfolio",
+            "Stake SOL",
+            "Best Yield Now",
+          ].map((chip) => (
             <button
               key={chip}
               onClick={() => handleSuggestion(chip)}
@@ -270,7 +277,10 @@ export default function Home() {
           </span>
         </div>
         <span className="font-label text-[9px] text-neutral-600 tracking-[0.2em] uppercase">
-          v1.0.0 — DEVNET
+          v1.0.0 —{" "}
+          {process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet-beta"
+            ? "MAINNET"
+            : "DEVNET"}
         </span>
       </div>
 
@@ -280,7 +290,6 @@ export default function Home() {
         onClose={() => setIsSettingsOpen(false)}
         onSave={handleSettingsSave}
       />
-
     </div>
-  )
+  );
 }

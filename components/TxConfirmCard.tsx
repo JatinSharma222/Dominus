@@ -198,7 +198,7 @@ export default function TxConfirmCard({ intent, onSuccess, onCancel }: TxConfirm
       {/* Solscan link after confirm */}
       {status === "confirmed" && txid && (
         
-         <a href={`https://solscan.io/tx/${txid}?cluster=devnet`}
+         <a href={`https://solscan.io/tx/${txid}${process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet-beta" ? "" : "?cluster=devnet"}`}
           target="_blank"
           rel="noopener noreferrer"
           className="block font-label text-[10px] text-tertiary tracking-widest uppercase hover:text-tertiary/80 transition-colors"
