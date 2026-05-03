@@ -21,20 +21,23 @@ const endpoint = process.env.NEXT_PUBLIC_HELIUS_RPC_URL || clusterApiUrl(network
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const wallets = useMemo(
-  () => [
-    new PhantomWalletAdapter(),
-    new SolflareWalletAdapter(),
-    new CoinbaseWalletAdapter(),
-    new TrustWalletAdapter(),
-    new LedgerWalletAdapter(),
-    new TorusWalletAdapter(),
-  ],
-  []
-)
+    () => [
+      new PhantomWalletAdapter(),
+      new SolflareWalletAdapter(),
+      new CoinbaseWalletAdapter(),
+      new TrustWalletAdapter(),
+      new LedgerWalletAdapter(),
+      new TorusWalletAdapter(),
+    ],
+    []
+  )
 
   return (
     <html lang="en">
       <head>
+        <title>DOMINUS — AI DeFi Agent for Solana</title>
+        <meta name="description" content="Natural language DeFi execution on Solana. Swap, stake, earn yield, and stream payments — in plain English." />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link
           href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@300;400;500;700&display=swap"
           rel="stylesheet"
@@ -44,7 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="bg-background text-on-surface font-body antialiased">
+      <body className="antialiased">
         <ConnectionProvider endpoint={endpoint}>
           <WalletProvider wallets={wallets} autoConnect>
             <WalletModalProvider>

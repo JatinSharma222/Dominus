@@ -28,32 +28,45 @@ export default function ChatWindow({ messages, isLoading }: ChatWindowProps) {
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8">
-        <div className="absolute w-[400px] h-[400px] bg-primary-container/10 blur-[120px] rounded-full pointer-events-none" />
-        <div className="relative text-center space-y-3">
-          <p className="font-label text-[10px] text-primary tracking-[0.4em] uppercase">
+      <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:28, padding:"0 32px", position:"relative", overflow:"hidden" }}>
+
+        {/* Ambient glow */}
+        <div style={{
+          position:"absolute", top:"50%", left:"50%", transform:"translate(-50%,-50%)",
+          width:380, height:380, borderRadius:"50%",
+          background:"radial-gradient(circle,rgba(245,158,11,0.05) 0%,transparent 70%)",
+          filter:"blur(40px)", pointerEvents:"none",
+        }} />
+
+        <div style={{ textAlign:"center", position:"relative" }}>
+          <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".58rem", fontWeight:600, letterSpacing:".38em", textTransform:"uppercase", color:"#FFC174", marginBottom:12 }}>
             SYSTEM STATUS: ONLINE
           </p>
-          <h2 className="font-headline text-4xl text-on-surface tracking-tighter">
+          <h2 style={{ fontFamily:"'Noto Serif',serif", fontWeight:400, letterSpacing:"-.02em", color:"#E5E2E1", fontSize:"clamp(1.8rem,3.5vw,2.5rem)", lineHeight:.95, marginBottom:14 }}>
             Oracle Command
           </h2>
-          <p className="font-body text-sm text-on-surface/50 max-w-sm">
-            Describe what you want to do with your crypto in plain English.
-            Dominus handles the rest.
+          <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".75rem", color:"rgba(229,226,225,.35)", lineHeight:1.6, maxWidth:320, margin:"0 auto" }}>
+            Describe what you want to do with your crypto in plain English. Aether-01 handles the rest.
           </p>
         </div>
-        <div className="relative flex flex-col gap-2 mt-4 w-full max-w-md">
+
+        {/* Example prompts */}
+        <div style={{ display:"flex", flexDirection:"column", gap:8, width:"100%", maxWidth:380 }}>
           {[
             "What's my portfolio worth?",
             "Swap 0.5 SOL to USDC",
             "Stake my idle SOL for yield",
             "Send $20 USDC to a friend every week",
           ].map((prompt) => (
-            <div
-              key={prompt}
-              className="px-4 py-2 bg-surface-container-low border border-outline-variant/20 rounded-lg"
-            >
-              <p className="font-label text-xs text-neutral-400 tracking-widest uppercase">
+            <div key={prompt} style={{
+              display:"flex", alignItems:"center", gap:10,
+              padding:"10px 16px",
+              background:"rgba(28,27,27,0.7)",
+              border:"1px solid rgba(83,68,52,0.22)",
+              borderRadius:2,
+            }}>
+              <span style={{ color:"rgba(255,193,116,0.3)", fontFamily:"'Space Grotesk',sans-serif", fontSize:".75rem", flexShrink:0 }}>›</span>
+              <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".62rem", letterSpacing:".14em", textTransform:"uppercase", color:"rgba(229,226,225,.3)" }}>
                 {prompt}
               </p>
             </div>
@@ -64,7 +77,7 @@ export default function ChatWindow({ messages, isLoading }: ChatWindowProps) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+    <div style={{ flex:1, overflowY:"auto", padding:"20px 32px", display:"flex", flexDirection:"column", gap:20 }}>
       {messages.map((message, i) => (
         <MessageBubble
           key={message.id}

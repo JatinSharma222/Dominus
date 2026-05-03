@@ -15,181 +15,147 @@ interface ToolInvocation {
   state: "call" | "result" | "partial-call"
   result?: unknown
 }
-
 interface MessageBubbleProps {
   message: Message & { toolInvocations?: ToolInvocation[] }
   isLoading?: boolean
 }
 
-function isSwapIntent(result: unknown): result is JupiterSwapIntent {
-  return (
-    typeof result === "object" &&
-    result !== null &&
-    (result as Record<string, unknown>).type === "swap_intent"
-  )
+const isSwap       = (r: unknown): r is JupiterSwapIntent        => typeof r === "object" && r !== null && (r as Record<string,unknown>).type === "swap_intent"
+const isKamino     = (r: unknown): r is KaminoDepositIntent      => typeof r === "object" && r !== null && (r as Record<string,unknown>).type === "kamino_deposit_intent"
+const isJito       = (r: unknown): r is JitoStakeIntent          => typeof r === "object" && r !== null && (r as Record<string,unknown>).type === "jito_stake_intent"
+const isStreamflow = (r: unknown): r is StreamflowPaymentIntent  => typeof r === "object" && r !== null && (r as Record<string,unknown>).type === "streamflow_payment_intent"
+
+const TOOL_LABELS: Record<string,string> = {
+  get_portfolio:         "Reading wallet balances",
+  swap_tokens:           "Resolving swap route via Jupiter",
+  deposit_for_yield:     "Loading Kamino yield rates",
+  stake_sol:             "Fetching Jito staking data",
+  create_payment_stream: "Setting up Streamflow payment",
 }
 
-function isKaminoDepositIntent(result: unknown): result is KaminoDepositIntent {
-  return (
-    typeof result === "object" &&
-    result !== null &&
-    (result as Record<string, unknown>).type === "kamino_deposit_intent"
-  )
-}
-
-function isJitoStakeIntent(result: unknown): result is JitoStakeIntent {
-  return (
-    typeof result === "object" &&
-    result !== null &&
-    (result as Record<string, unknown>).type === "jito_stake_intent"
-  )
-}
-
-function isStreamflowPaymentIntent(result: unknown): result is StreamflowPaymentIntent {
-  return (
-    typeof result === "object" &&
-    result !== null &&
-    (result as Record<string, unknown>).type === "streamflow_payment_intent"
-  )
-}
-
-const toolLabels: Record<string, string> = {
-  get_portfolio:         "Reading wallet balances...",
-  swap_tokens:           "Resolving swap route via Jupiter...",
-  deposit_for_yield:     "Loading Kamino yield rates...",
-  stake_sol:             "Fetching Jito staking data...",
-  create_payment_stream: "Setting up Streamflow payment...",
-}
+const AETHER_AVATAR =
+  "https://lh3.googleusercontent.com/aida-public/AB6AXuA8O-jxGq9p6pB2fhiscu4C-DTKs4C09K8meX9zguYmeMrhNe6q4QM7dv5QfDXGYL6uAgpBKmN5Q2tGcJlPM1OkJlkQuWjeWiqkoq2pGJLrSy6daejDBvONTDqOdDuCtB8yp73cQFNewH5t4Rz-5l6N9L8864wZTLKGb8MC5nNSnfwqh4xDTrnheF1zQE5gaeZ4B-jYEVJh0lgNIbtHmXSvZFtMgQ1z3pmXqf7-8swJqWCH5CePQ1A2sfZV_EMt13kNd1Uq2KdYqqZk"
 
 export default function MessageBubble({ message, isLoading }: MessageBubbleProps) {
   const isAI = message.role === "assistant"
-  const time = new Date().toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  })
+  const time = new Date().toLocaleTimeString("en-US", { hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false })
+  const tools = message.toolInvocations ?? []
 
-  const swapIntents = (message.toolInvocations ?? [])
-    .filter((t) => t.state === "result" && isSwapIntent(t.result))
-    .map((t) => t.result as JupiterSwapIntent)
-
-  const kaminoDepositIntents = (message.toolInvocations ?? [])
-    .filter((t) => t.state === "result" && isKaminoDepositIntent(t.result))
-    .map((t) => t.result as KaminoDepositIntent)
-
-  const jitoStakeIntents = (message.toolInvocations ?? [])
-    .filter((t) => t.state === "result" && isJitoStakeIntent(t.result))
-    .map((t) => t.result as JitoStakeIntent)
-
-  const streamflowPaymentIntents = (message.toolInvocations ?? [])
-    .filter((t) => t.state === "result" && isStreamflowPaymentIntent(t.result))
-    .map((t) => t.result as StreamflowPaymentIntent)
+  const swapIntents       = tools.filter((t) => t.state === "result" && isSwap(t.result)).map((t) => t.result as JupiterSwapIntent)
+  const kaminoIntents     = tools.filter((t) => t.state === "result" && isKamino(t.result)).map((t) => t.result as KaminoDepositIntent)
+  const jitoIntents       = tools.filter((t) => t.state === "result" && isJito(t.result)).map((t) => t.result as JitoStakeIntent)
+  const streamflowIntents = tools.filter((t) => t.state === "result" && isStreamflow(t.result)).map((t) => t.result as StreamflowPaymentIntent)
 
   if (isAI) {
     return (
-      <div className="flex flex-col gap-1 max-w-[85%] mr-auto">
-        <span className="font-label text-[10px] text-neutral-500 tracking-widest uppercase pl-6">
-          AETHER-01 CORE // {time}
-        </span>
+      <div style={{ display:"flex", gap:10, maxWidth:"88%", marginRight:"auto" }}>
 
-        <div className="bg-surface-container-low border-l-4 border-primary/40 p-4 pl-6 rounded-lg space-y-3">
+        {/* Avatar */}
+        <div style={{
+          width:28, height:28, borderRadius:3, flexShrink:0, marginTop:18, overflow:"hidden",
+          border:"1px solid rgba(255,193,116,.2)",
+          background:"rgba(255,193,116,.07)",
+          display:"flex", alignItems:"center", justifyContent:"center",
+        }}>
+          <img
+            src={AETHER_AVATAR}
+            alt="Aether-01"
+            style={{ width:"100%", height:"100%", objectFit:"cover" }}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none"
+            }}
+          />
+        </div>
 
-          {/* Tool invocation status badges */}
-          {message.toolInvocations?.map((tool, i) => (
-            <div key={i} className="flex items-center gap-3">
-              {tool.state === "call" || tool.state === "partial-call" ? (
-                <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse shrink-0" />
-                  <span className="font-label text-[10px] text-tertiary tracking-widest uppercase">
-                    {toolLabels[tool.toolName] ?? `Calling ${tool.toolName}...`}
+        <div style={{ flex:1, minWidth:0 }}>
+          {/* Eyebrow */}
+          <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".5rem", fontWeight:600, letterSpacing:".22em", textTransform:"uppercase", color:"rgba(229,226,225,.25)", marginBottom:6 }}>
+            AETHER-01 CORE // {time}
+          </p>
+
+          {/* Bubble */}
+          <div style={{
+            background:"#1C1B1B",
+            borderLeft:"2.5px solid rgba(255,193,116,.32)",
+            borderRadius:"0 3px 3px 0",
+            padding:"14px 18px",
+            display:"flex", flexDirection:"column", gap:12,
+          }}>
+            {/* Tool status rows */}
+            {tools.map((tool, i) => {
+              const done = tool.state === "result"
+              return (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{
+                    width:6, height:6, borderRadius:"50%", flexShrink:0,
+                    background: done ? "#FFC174" : "#B1CFF6",
+                    animation: done ? "none" : "blink 1.5s ease-in-out infinite",
+                  }} />
+                  <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".58rem", fontWeight:600, letterSpacing:".18em", textTransform:"uppercase", color: done ? "#FFC174" : "#B1CFF6" }}>
+                    {done
+                      ? `${TOOL_LABELS[tool.toolName] ?? tool.toolName} ✓`
+                      : `${TOOL_LABELS[tool.toolName] ?? tool.toolName}...`}
                   </span>
-                </>
-              ) : (
-                <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-                  <span className="font-label text-[10px] text-primary tracking-widest uppercase">
-                    {toolLabels[tool.toolName]?.replace("...", " ✓") ?? `${tool.toolName} ✓`}
-                  </span>
-                </>
-              )}
-            </div>
-          ))}
+                </div>
+              )
+            })}
 
-          {/* Jupiter swap cards */}
-          {swapIntents.map((intent, i) => (
-            <TxConfirmCard
-              key={`swap-${i}`}
-              intent={intent}
-              onSuccess={(txid) => console.log("Swap confirmed:", txid)}
-              onCancel={() => console.log("Swap cancelled")}
-            />
-          ))}
+            {/* Transaction cards */}
+            {swapIntents.map((intent, i) => (
+              <TxConfirmCard key={`swap-${i}`} intent={intent} onSuccess={(id) => console.log("swap:", id)} onCancel={() => {}} />
+            ))}
+            {kaminoIntents.map((intent, i) => (
+              <KaminoDepositCard key={`kamino-${i}`} intent={intent} onSuccess={(id) => console.log("kamino:", id)} onCancel={() => {}} />
+            ))}
+            {jitoIntents.map((intent, i) => (
+              <JitoStakeCard key={`jito-${i}`} intent={intent} onSuccess={(id) => console.log("jito:", id)} onCancel={() => {}} />
+            ))}
+            {streamflowIntents.map((intent, i) => (
+              <StreamflowPaymentCard key={`sf-${i}`} intent={intent} onSuccess={(id) => console.log("stream:", id)} onCancel={() => {}} />
+            ))}
 
-          {/* Kamino deposit cards */}
-          {kaminoDepositIntents.map((intent, i) => (
-            <KaminoDepositCard
-              key={`kamino-${i}`}
-              intent={intent}
-              onSuccess={(txid) => console.log("Kamino deposit confirmed:", txid)}
-              onCancel={() => console.log("Kamino deposit cancelled")}
-            />
-          ))}
-
-          {/* Jito stake cards */}
-          {jitoStakeIntents.map((intent, i) => (
-            <JitoStakeCard
-              key={`jito-${i}`}
-              intent={intent}
-              onSuccess={(txid) => console.log("Jito stake confirmed:", txid)}
-              onCancel={() => console.log("Jito stake cancelled")}
-            />
-          ))}
-
-          {/* Streamflow payment cards */}
-          {streamflowPaymentIntents.map((intent, i) => (
-            <StreamflowPaymentCard
-              key={`streamflow-${i}`}
-              intent={intent}
-              onSuccess={(streamId: string) => console.log("Streamflow stream created:", streamId)}
-              onCancel={() => console.log("Streamflow stream cancelled")}
-            />
-          ))}
-
-          {/* Main text content */}
-          {message.content ? (
-            <p className="font-body text-sm text-on-surface leading-relaxed whitespace-pre-wrap">
-              {message.content}
-            </p>
-          ) : isLoading ? (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-pulse" />
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-pulse [animation-delay:0.2s]" />
-                <span className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-pulse [animation-delay:0.4s]" />
+            {/* Message text */}
+            {message.content ? (
+              <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".78rem", color:"rgba(216,195,173,.9)", lineHeight:1.65, whiteSpace:"pre-wrap" }}>
+                {message.content}
+              </p>
+            ) : isLoading ? (
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <div style={{ display:"flex", gap:5 }}>
+                  {[0, 160, 320].map((delay) => (
+                    <span key={delay} style={{
+                      width:6, height:6, borderRadius:"50%",
+                      background:"rgba(255,193,116,.45)",
+                      animation:`blink 1.4s ease-in-out infinite`,
+                      animationDelay:`${delay}ms`,
+                    }} />
+                  ))}
+                </div>
+                <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".55rem", letterSpacing:".18em", textTransform:"uppercase", color:"rgba(229,226,225,.25)" }}>
+                  {tools.some((t) => t.state === "result") ? "Generating response..." : tools.length ? "Processing..." : "Thinking..."}
+                </span>
               </div>
-              <span className="font-label text-[10px] text-neutral-500 tracking-widest uppercase animate-pulse">
-                {message.toolInvocations?.some((t) => t.state === "result")
-                  ? "Generating response..."
-                  : message.toolInvocations?.length
-                  ? "Processing..."
-                  : "Thinking..."}
-              </span>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </div>
     )
   }
 
+  // User message
   const authCode = Math.random().toString(36).slice(2, 6).toUpperCase()
-
   return (
-    <div className="flex flex-col gap-1 max-w-[80%] ml-auto items-end">
-      <span className="font-label text-[10px] text-primary/60 tracking-widest uppercase pr-6">
+    <div style={{ display:"flex", flexDirection:"column", maxWidth:"76%", marginLeft:"auto", alignItems:"flex-end", gap:5 }}>
+      <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".5rem", fontWeight:600, letterSpacing:".22em", textTransform:"uppercase", color:"rgba(255,193,116,.35)", paddingRight:4 }}>
         OPERATOR COMMAND // AUTH:{authCode}
-      </span>
-      <div className="bg-surface-container-high border-r-4 border-outline/40 p-4 pr-6 rounded-lg">
-        <p className="font-body text-sm text-on-surface leading-relaxed whitespace-pre-wrap">
+      </p>
+      <div style={{
+        background:"#252423",
+        borderRight:"2.5px solid rgba(160,142,122,.32)",
+        borderRadius:"3px 0 0 3px",
+        padding:"12px 18px",
+      }}>
+        <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".78rem", color:"#E5E2E1", lineHeight:1.6, whiteSpace:"pre-wrap" }}>
           {message.content}
         </p>
       </div>
