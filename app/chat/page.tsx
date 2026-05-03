@@ -14,7 +14,6 @@ const AETHER_AVATAR =
 // Only nav items that have real routes
 const NAV_ITEMS = [
   { icon: "psychology",  label: "Neural Link",  href: "/chat",  active: true  },
-  { icon: "sensors",     label: "Pulse",        href: "/pulse", active: false },
 ]
 
 const NEURAL_METRICS = [

@@ -76,7 +76,7 @@ export default function LandingPage() {
             linear-gradient(to right,rgba(160,142,122,0.065) 1px,transparent 1px),
             linear-gradient(to bottom,rgba(160,142,122,0.065) 1px,transparent 1px);
         }
-        .vig { background:radial-gradient(ellipse 75% 75% at 50% 50%,transparent 25%,rgba(4,2,1,0.94) 100%); }
+        .vig { background:radial-gradient(ellipse 90% 85% at 50% 50%,transparent 35%,rgba(4,2,1,0.82) 100%); }
 
         @keyframes flicker{0%,100%{opacity:1}92%{opacity:1}93%{opacity:.88}94%{opacity:1}97%{opacity:.92}98%{opacity:1}}
         @keyframes scan{0%{top:-4px}100%{top:calc(100vh + 4px)}}
@@ -96,12 +96,13 @@ export default function LandingPage() {
           position:relative;display:inline-flex;align-items:center;justify-content:center;
           padding:1.1rem 3.8rem;
           font-family:'Space Grotesk',sans-serif;font-size:.72rem;font-weight:700;
-          letter-spacing:.25em;text-transform:uppercase;
-          color:#3D2200;
+          letter-spacing:.28em;text-transform:uppercase;
+          color:#2A1500;
           background:linear-gradient(140deg,#FFD08A 0%,#FFC174 25%,#F59E0B 65%,#D97706 100%);
           border-radius:2px;border:none;cursor:pointer;overflow:hidden;
-          box-shadow:0 0 35px rgba(245,158,11,.52),0 0 70px rgba(245,158,11,.16),inset 0 1px 0 rgba(255,255,255,.22);
+          box-shadow:0 0 40px rgba(245,158,11,.55),0 0 80px rgba(245,158,11,.18),inset 0 1px 0 rgba(255,255,255,.3),inset 0 -1px 0 rgba(0,0,0,.15);
           transition:transform .15s ease,box-shadow .25s ease;
+          text-shadow:0 1px 0 rgba(255,255,255,.2);
         }
         .cta::before{
           content:'';position:absolute;inset:-3px;border:1px solid rgba(255,193,116,.5);
@@ -109,7 +110,7 @@ export default function LandingPage() {
           animation:borderShimmer 3.5s ease-in-out infinite;
         }
         .cta::after{content:'';position:absolute;inset:0;background:transparent;transition:background .2s}
-        .cta:hover{transform:scale(1.04);box-shadow:0 0 55px rgba(245,158,11,.68),0 0 100px rgba(245,158,11,.22),inset 0 1px 0 rgba(255,255,255,.22)}
+        .cta:hover{transform:scale(1.04);box-shadow:0 0 60px rgba(245,158,11,.7),0 0 110px rgba(245,158,11,.25),inset 0 1px 0 rgba(255,255,255,.3),inset 0 -1px 0 rgba(0,0,0,.15)}
         .cta:hover::after{background:rgba(255,255,255,.12)}
         .cta:active{transform:scale(.97)}
 
@@ -140,18 +141,26 @@ export default function LandingPage() {
 
       <div style={{ position:"fixed", inset:0, background:"#050302", overflow:"hidden" }}>
 
+        {/* Sides fill — visible when image doesn't cover full width */}
+        <div style={{
+          position:"absolute", inset:0,
+          background:"radial-gradient(ellipse 130% 100% at 50% 60%, #1a0c02 0%, #050302 60%)",
+        }} />
+
         {/* Gate image */}
         <div style={{
           position:"absolute", inset:0,
           backgroundImage:`url('${GATE_BG}')`,
-          backgroundSize:"cover", backgroundPosition:"center 58%",
+          backgroundSize:"85% auto",
+          backgroundPosition:"center 52%",
+          backgroundRepeat:"no-repeat",
           animation:"flicker 9s ease-in-out infinite",
         }} />
 
         {/* Multi-layer gradient */}
         <div style={{
           position:"absolute", inset:0,
-          background:"linear-gradient(to bottom,rgba(4,2,1,.75) 0%,rgba(5,3,1,.08) 28%,rgba(5,3,1,.12) 68%,rgba(4,2,1,.9) 100%)",
+          background:"linear-gradient(to bottom,rgba(4,2,1,.55) 0%,rgba(5,3,1,.04) 25%,rgba(5,3,1,.04) 70%,rgba(4,2,1,.82) 100%)",
         }} />
 
         {/* Vignette */}
