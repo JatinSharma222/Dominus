@@ -1,10 +1,13 @@
 @import "tailwindcss";
 
+/* ══════════════════════════════════════════════════════════
+   DOMINUS — Design Tokens  (Tailwind v4 @theme)
+══════════════════════════════════════════════════════════ */
 @theme {
-  /* ── Surface scale ───────────────────────────────────────── */
+  /* Surface scale */
   --color-background:                #131313;
   --color-surface:                   #131313;
-  --color-surface-dim:               #131313;
+  --color-surface-dim:               #0E0E0E;
   --color-surface-bright:            #3A3939;
   --color-surface-variant:           #353534;
   --color-surface-tint:              #FFB95F;
@@ -14,12 +17,12 @@
   --color-surface-container-high:    #2A2A2A;
   --color-surface-container-highest: #353534;
 
-  /* ── On-surface ──────────────────────────────────────────── */
+  /* On-surface */
   --color-on-surface:                #E5E2E1;
   --color-on-surface-variant:        #D8C3AD;
   --color-on-background:             #E5E2E1;
 
-  /* ── Primary ─────────────────────────────────────────────── */
+  /* Primary */
   --color-primary:                   #FFC174;
   --color-primary-fixed:             #FFDDB8;
   --color-primary-fixed-dim:         #FFB95F;
@@ -30,7 +33,7 @@
   --color-on-primary-container:      #613B00;
   --color-inverse-primary:           #855300;
 
-  /* ── Secondary ───────────────────────────────────────────── */
+  /* Secondary */
   --color-secondary:                 #FFB4A5;
   --color-secondary-fixed:           #FFDAD3;
   --color-secondary-fixed-dim:       #FFB4A5;
@@ -39,7 +42,7 @@
   --color-on-secondary-fixed:        #3E0400;
   --color-on-secondary-container:    #FFA998;
 
-  /* ── Tertiary ────────────────────────────────────────────── */
+  /* Tertiary */
   --color-tertiary:                  #B1CFF6;
   --color-tertiary-fixed:            #D2E4FF;
   --color-tertiary-fixed-dim:        #ACC9F0;
@@ -48,45 +51,45 @@
   --color-on-tertiary-fixed:         #001D36;
   --color-on-tertiary-container:     #284566;
 
-  /* ── Outline ─────────────────────────────────────────────── */
+  /* Outline */
   --color-outline:                   #A08E7A;
   --color-outline-variant:           #534434;
 
-  /* ── Error ───────────────────────────────────────────────── */
+  /* Error */
   --color-error:                     #FFB4AB;
   --color-error-container:           #93000A;
   --color-on-error:                  #690005;
   --color-on-error-container:        #FFDAD6;
 
-  /* ── Inverse ─────────────────────────────────────────────── */
+  /* Inverse */
   --color-inverse-surface:           #E5E2E1;
   --color-inverse-on-surface:        #313030;
 
-  /* ── Typography ──────────────────────────────────────────── */
+  /* Typography */
   --font-headline: "Noto Serif", serif;
   --font-body:     "Space Grotesk", sans-serif;
   --font-label:    "Space Grotesk", sans-serif;
 
-  /* ── Radius — "weathered yet machined" ───────────────────── */
-  --radius:        0.125rem;   /* rounded     → 2px  */
-  --radius-sm:     0.125rem;   /* rounded-sm  → 2px  */
-  --radius-md:     0.125rem;   /* rounded-md  → 2px  */
-  --radius-lg:     0.25rem;    /* rounded-lg  → 4px  */
-  --radius-xl:     0.5rem;     /* rounded-xl  → 8px  */
-  --radius-2xl:    0.5rem;     /* rounded-2xl → 8px  */
-  --radius-3xl:    0.5rem;     /* rounded-3xl → 8px  */
-  --radius-full:   0.75rem;    /* rounded-full → 12px (pills only — NOT circles) */
+  /* Radius — weathered/machined */
+  --radius:        0.125rem;
+  --radius-sm:     0.125rem;
+  --radius-md:     0.125rem;
+  --radius-lg:     0.25rem;
+  --radius-xl:     0.5rem;
+  --radius-2xl:    0.5rem;
+  --radius-full:   0.75rem;
 }
 
-/* ── Base reset ──────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   BASE
+══════════════════════════════════════════════════════════ */
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body {
   height: 100%;
-  background: #131313;
+  background: #0E0E0E;
   color: #E5E2E1;
-  margin: 0;
-  padding: 0;
+  margin: 0; padding: 0;
 }
 
 body {
@@ -95,34 +98,42 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Material Symbols ────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   MATERIAL SYMBOLS
+══════════════════════════════════════════════════════════ */
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   line-height: 1;
   user-select: none;
 }
 
-/* ── Scrollbar ───────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   SCROLLBAR
+══════════════════════════════════════════════════════════ */
 ::-webkit-scrollbar            { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track      { background: #0E0E0E; }
 ::-webkit-scrollbar-thumb      { background: #534434; border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: #FFC174; }
-::selection { background: rgba(255, 193, 116, 0.2); }
+::-webkit-scrollbar-thumb:hover{ background: #FFC174; }
+::selection                    { background: rgba(255,193,116,.22); }
 
-/* ── Holographic grid overlay ────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   UTILITY CLASSES
+══════════════════════════════════════════════════════════ */
+
+/* Holographic grid */
 .hud-grid {
-  background-size: 32px 32px;
+  background-size: 38px 38px;
   background-image:
-    linear-gradient(to right,  rgba(160, 142, 122, 0.07) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(160, 142, 122, 0.07) 1px, transparent 1px);
+    linear-gradient(to right,  rgba(160,142,122,.065) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(160,142,122,.065) 1px, transparent 1px);
 }
 
-/* ── Radial vignette overlay ─────────────────────────────── */
+/* Radial vignette */
 .vignette {
   background: radial-gradient(circle, transparent 20%, #050505 100%);
 }
 
-/* ── Gilded gradient text ────────────────────────────────── */
+/* Gilded text */
 .text-gilded {
   background: linear-gradient(135deg, #FFC174, #F59E0B);
   -webkit-background-clip: text;
@@ -130,10 +141,147 @@ body {
   background-clip: text;
 }
 
-/* ── Wallet adapter — dark theme + suppress default button ── */
+/* ─── Glass panel ──────────────────────────────────────── */
+.glass-panel {
+  background: linear-gradient(
+    135deg,
+    rgba(255,255,255,.065) 0%,
+    rgba(255,192,60,.028)  50%,
+    rgba(255,255,255,.042) 100%
+  );
+  backdrop-filter: blur(24px) saturate(1.5) brightness(1.05);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5) brightness(1.05);
+  border: 1px solid rgba(255,185,60,.2);
+  border-top: 1px solid rgba(255,255,255,.13);
+  border-left: 1px solid rgba(255,255,255,.08);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,.09),
+    inset 0 -1px 0 rgba(0,0,0,.18),
+    0 8px 40px rgba(0,0,0,.58),
+    0 0 28px rgba(245,158,11,.055);
+  border-radius: 3px;
+  position: relative;
+  overflow: hidden;
+}
+.glass-panel::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(108deg, transparent 28%, rgba(255,255,255,.055) 50%, transparent 72%);
+  background-size: 250% 100%;
+  animation: glass-sweep 9s ease-in-out infinite;
+}
+
+/* ══════════════════════════════════════════════════════════
+   KEYFRAMES
+══════════════════════════════════════════════════════════ */
+
+/* Thinking / loading dots */
+@keyframes blink {
+  0%, 100% { opacity: 1;   transform: scale(1);   }
+  50%       { opacity: .18; transform: scale(.48); }
+}
+
+/* Live-status pulse dot */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1;  transform: scale(1);   }
+  50%       { opacity: .3; transform: scale(.58); }
+}
+
+/* Message enter */
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Page elements rising */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Background flicker (filmic) */
+@keyframes flicker {
+  0%,100%{opacity:1} 91.5%{opacity:1} 92.2%{opacity:.91} 93%{opacity:1} 96.5%{opacity:.96} 97%{opacity:1}
+}
+
+/* Scan line */
+@keyframes scan {
+  0%   { transform: translateY(-4px); }
+  100% { transform: translateY(100vh); }
+}
+
+/* Wordmark glow pulse */
+@keyframes glow-pulse {
+  0%,100% {
+    filter:
+      drop-shadow(0 0 28px rgba(245,158,11,.75))
+      drop-shadow(0 0 80px rgba(245,120,10,.3));
+  }
+  50% {
+    filter:
+      drop-shadow(0 0 55px rgba(255,185,10,1))
+      drop-shadow(0 0 130px rgba(245,140,10,.48));
+  }
+}
+
+/* Portal rings */
+@keyframes ring-cw       { to { transform: rotate(360deg);  } }
+@keyframes ring-ccw      { to { transform: rotate(-360deg); } }
+@keyframes ring-breathe  {
+  0%,100% { transform: scale(1);    opacity: .48; }
+  60%     { transform: scale(1.09); opacity: .14; }
+}
+
+/* CTA glow border */
+@keyframes shimmer-glow {
+  0%,100% { opacity: .32; }
+  50%     { opacity: .80; }
+}
+
+/* Glass sweep shine */
+@keyframes glass-sweep {
+  0%   { background-position: -250% 0; }
+  100% { background-position:  250% 0; }
+}
+
+/* Wordmark glitch */
+@keyframes glitch {
+  0%,88%,100% { clip-path: none; transform: none; opacity: 1; }
+  89%  { clip-path: inset(26% 0 55% 0); transform: translate(-6px,0) skewX(-2deg); opacity: .9; }
+  90%  { clip-path: inset(54% 0 16% 0); transform: translate(6px,0);               opacity: .9; }
+  91%  { clip-path: inset(7% 0 70% 0);  transform: translate(-3px,0);              opacity: .95; }
+  92%  { clip-path: none; transform: none; opacity: 1; }
+}
+
+/* Decorative float */
+@keyframes float-y {
+  0%,100% { transform: translateY(0)    rotate(45deg); }
+  50%     { transform: translateY(-10px) rotate(45deg); }
+}
+
+/* Beam pulse */
+@keyframes beam-pulse {
+  0%,100% { opacity: .32; }
+  50%     { opacity: .82; }
+}
+
+/* Corner bracket enter */
+@keyframes corner-in {
+  from { opacity: 0; transform: scale(.55); }
+  to   { opacity: 1; transform: scale(1);   }
+}
+
+/* Status bar progress */
+@keyframes bar-grow {
+  from { width: 0; }
+  to   { width: var(--target-w); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   WALLET ADAPTER OVERRIDE — suppress default button
+══════════════════════════════════════════════════════════ */
 .wallet-adapter-modal-wrapper {
   background: #1C1B1B !important;
-  border: 1px solid rgba(83, 68, 52, 0.35) !important;
+  border: 1px solid rgba(83,68,52,.35) !important;
   border-radius: 4px !important;
 }
 .wallet-adapter-modal-title {
@@ -143,52 +291,19 @@ body {
 .wallet-adapter-modal-list li > button,
 .wallet-adapter-button {
   background: #201F1F !important;
-  border: 1px solid rgba(255, 193, 116, 0.18) !important;
+  border: 1px solid rgba(255,193,116,.18) !important;
   color: #E5E2E1 !important;
   font-family: "Space Grotesk", sans-serif !important;
-  transition: background 0.18s !important;
+  transition: background .18s !important;
 }
 .wallet-adapter-modal-list li > button:hover,
 .wallet-adapter-button:hover {
   background: #2A2A2A !important;
-  border-color: rgba(255, 193, 116, 0.32) !important;
+  border-color: rgba(255,193,116,.32) !important;
 }
-/* Suppress adapter's own trigger — we render our own wallet buttons */
 .wallet-adapter-dropdown,
 .wallet-adapter-button-trigger,
 .wallet-adapter-collapse,
 [class*="wallet-adapter-dropdown"] {
   display: none !important;
-}
-
-/* ── Keyframes ───────────────────────────────────────────── */
-
-/* Thinking / loading dots in MessageBubble */
-@keyframes blink {
-  0%, 100% { opacity: 1;  transform: scale(1);   }
-  50%       { opacity: .2; transform: scale(0.6); }
-}
-
-/* Pulsing live-status dot */
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1;  transform: scale(1);   }
-  50%       { opacity: .3; transform: scale(0.6); }
-}
-
-/* Status-bar progress bars */
-@keyframes bar-grow {
-  from { width: 0; }
-  to   { width: var(--target-w); }
-}
-
-/* Subtle ambient shimmer on hero wordmark */
-@keyframes shimmer {
-  0%   { background-position: -200% center; }
-  100% { background-position:  200% center; }
-}
-
-/* Slow float for decorative elements */
-@keyframes float {
-  0%, 100% { transform: translateY(0)    rotate(45deg); }
-  50%       { transform: translateY(-8px) rotate(45deg); }
 }
