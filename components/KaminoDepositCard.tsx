@@ -1,19 +1,9 @@
 "use client"
 
-// components/KaminoDepositCard.tsx
-//
-// NO klend-sdk dependency — uses /api/kamino/apy proxy for live APY data.
-// Transaction building is handled by /api/kamino/deposit (server route).
-//
-// Kamino is a MAINNET protocol. This card fetches live data from mainnet
-// regardless of which network the rest of the app uses for devnet testing.
-
 import { useState, useEffect } from "react"
 import { useWallet } from "@solana/wallet-adapter-react"
 import { VersionedTransaction, Transaction } from "@solana/web3.js"
 import { KaminoDepositIntent } from "@/lib/tools/kamino"
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface KaminoDepositCardProps {
   intent: KaminoDepositIntent
@@ -21,367 +11,304 @@ interface KaminoDepositCardProps {
   onCancel?: () => void
 }
 
-type CardStatus =
-  | "loading_apy"
-  | "ready"
-  | "apy_error"
-  | "building"
-  | "signing"
-  | "sending"
-  | "confirmed"
-  | "failed"
+type CardStatus = "loading_apy"|"ready"|"apy_error"|"building"|"signing"|"sending"|"confirmed"|"failed"
 
-interface APYData {
-  supplyApy: number       // e.g. 5.23 (already as %)
-  totalSupplyUsd: number
-  utilizationRate: number // already as %
-  source: "live" | "estimated"
-}
+interface APYData { apy: number; source: "live"|"estimated"; marketSize?: string; utilization?: string }
 
-// ─── Proxy fetch ──────────────────────────────────────────────────────────────
-// Routes through /api/kamino/apy to avoid CORS and handle API version changes.
-
-async function fetchKaminoAPY(
-  marketAddress: string,
-  mint: string,
-  symbol: string
-): Promise<APYData> {
-  const params = new URLSearchParams({ market: marketAddress, mint, symbol })
-  const res = await fetch(`/api/kamino/apy?${params.toString()}`, {
-    headers: { Accept: "application/json" },
-  })
-
+async function fetchKaminoAPY(token: string): Promise<APYData> {
+  const res = await fetch(`/api/kamino/apy?token=${encodeURIComponent(token)}`, { headers: { Accept:"application/json" } })
   const body = await res.json()
-
-  if (!res.ok) {
-    throw new Error(body.error ?? `Kamino APY fetch failed (${res.status})`)
-  }
-
+  if (!res.ok) throw new Error(body.error ?? `Kamino APY fetch failed (${res.status})`)
   return body as APYData
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatUsd(n: number): string {
-  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`
-  if (n >= 1_000_000)     return `$${(n / 1_000_000).toFixed(2)}M`
-  if (n >= 1_000)         return `$${(n / 1_000).toFixed(2)}K`
-  return `$${n.toFixed(2)}`
+const cardShell: React.CSSProperties = {
+  background: "linear-gradient(145deg, rgba(20,26,20,.97) 0%, rgba(14,20,14,.99) 100%)",
+  border: "1px solid rgba(100,220,120,.13)",
+  borderTop: "1px solid rgba(120,240,140,.22)",
+  borderRadius: 14,
+  boxShadow: [
+    "0 0 0 1px rgba(0,0,0,.55)",
+    "0 4px 8px rgba(0,0,0,.62)",
+    "0 16px 40px rgba(0,0,0,.76)",
+    "0 32px 70px rgba(0,0,0,.55)",
+    "0 0 40px rgba(60,200,90,.05)",
+    "inset 0 1px 0 rgba(120,240,140,.07)",
+    "inset 0 -1px 0 rgba(0,0,0,.3)",
+  ].join(","),
+  overflow: "hidden", position:"relative" as const, width:"100%", maxWidth:420,
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
-export default function KaminoDepositCard({
-  intent,
-  onSuccess,
-  onCancel,
-}: KaminoDepositCardProps) {
+export default function KaminoDepositCard({ intent, onSuccess, onCancel }: KaminoDepositCardProps) {
   const { publicKey, signTransaction } = useWallet()
 
-  const [status, setStatus]     = useState<CardStatus>("loading_apy")
-  const [apyData, setApyData]   = useState<APYData | null>(null)
+  const [status,   setStatus]   = useState<CardStatus>("loading_apy")
+  const [apyData,  setApyData]  = useState<APYData | null>(null)
   const [apyError, setApyError] = useState<string | null>(null)
-  const [txid, setTxid]         = useState<string | null>(null)
-  const [txError, setTxError]   = useState<string | null>(null)
+  const [txid,     setTxid]     = useState<string | null>(null)
+  const [txError,  setTxError]  = useState<string | null>(null)
 
-  // Projected earnings
-  const dailyEarnings   = apyData ? (intent.amount * apyData.supplyApy) / 100 / 365 : null
-  const monthlyEarnings = dailyEarnings ? dailyEarnings * 30 : null
-  const yearlyEarnings  = apyData ? (intent.amount * apyData.supplyApy) / 100 : null
+  const daily   = apyData ? (intent.amount * apyData.apy) / 100 / 365 : null
+  const monthly = daily   ? daily * 30 : null
+  const yearly  = apyData ? (intent.amount * apyData.apy) / 100 : null
 
-  // ── Load APY via proxy ─────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
-
-    async function loadAPY() {
-      setStatus("loading_apy")
-      setApyError(null)
+    async function load() {
+      setStatus("loading_apy"); setApyError(null)
       try {
-        const data = await fetchKaminoAPY(
-          intent.marketAddress,
-          intent.mint,
-          intent.token
-        )
-        if (!cancelled) {
-          setApyData(data)
-          setStatus("ready")
-        }
+        const data = await fetchKaminoAPY(intent.token)
+        if (!cancelled) { setApyData(data); setStatus("ready") }
       } catch (err) {
-        if (!cancelled) {
-          const msg = err instanceof Error ? err.message : String(err)
-          console.error("[KaminoDepositCard] APY load error:", msg)
-          setApyError(msg)
-          setStatus("apy_error")
-        }
+        if (!cancelled) { setApyError(err instanceof Error ? err.message : String(err)); setStatus("apy_error") }
       }
     }
-
-    loadAPY()
+    load()
     return () => { cancelled = true }
-  }, [intent.marketAddress, intent.mint, intent.token])
+  }, [intent.token])
 
-  // ── Confirm deposit ────────────────────────────────────────────────────────
   async function handleConfirm() {
     if (!publicKey || !signTransaction || !apyData) return
     setTxError(null)
-
-    // Mainnet-only guard during devnet development
     if (process.env.NEXT_PUBLIC_SOLANA_NETWORK === "devnet") {
-      setTxError(
-        "Kamino is a mainnet protocol. Deposit execution is enabled in Week 4 when the app switches to mainnet."
-      )
-      setStatus("failed")
-      return
+      setTxError("Kamino is a mainnet protocol. Execution enabled when app switches to mainnet.")
+      setStatus("failed"); return
     }
-
     try {
       setStatus("building")
-
       const res = await fetch("/api/kamino/deposit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token:         intent.token,
-          mint:          intent.mint,
-          amount:        intent.amount,
-          decimals:      intent.decimals,
-          marketAddress: intent.marketAddress,
-          walletAddress: publicKey.toString(),
-        }),
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ amount:intent.amount, token:intent.token, walletAddress:publicKey.toString(), marketAddress:intent.marketAddress, mint:intent.mint, decimals:intent.decimals }),
       })
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: res.statusText }))
-        throw new Error(body.error ?? `Deposit build failed (${res.status})`)
-      }
-
-      const { transaction: txBase64, isVersioned } = await res.json() as {
-        transaction: string
-        isVersioned: boolean
-      }
-
-      const txBytes = Buffer.from(txBase64, "base64")
-      const tx = isVersioned
-        ? VersionedTransaction.deserialize(txBytes)
-        : Transaction.from(txBytes)
-
+      if (!res.ok) { const b = await res.json().catch(() => ({ error:res.statusText })); throw new Error(b.error ?? `Build failed (${res.status})`) }
+      const { transaction:txBase64, isVersioned } = await res.json() as { transaction:string; isVersioned:boolean }
+      const txBytes = Buffer.from(txBase64,"base64")
+      const tx = isVersioned ? VersionedTransaction.deserialize(txBytes) : Transaction.from(txBytes)
       setStatus("signing")
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const signed = await signTransaction(tx as any)
-
       setStatus("sending")
       const mainnetRpc = process.env.NEXT_PUBLIC_KAMINO_RPC_URL || "https://api.mainnet-beta.solana.com"
       const { Connection } = await import("@solana/web3.js")
-      const mainnetConnection = new Connection(mainnetRpc, "confirmed")
-
-      const rawTx = signed.serialize()
-      const sig = await mainnetConnection.sendRawTransaction(rawTx, {
-        skipPreflight: false,
-        maxRetries: 3,
-      })
-      await mainnetConnection.confirmTransaction(sig, "confirmed")
-
-      setTxid(sig)
-      setStatus("confirmed")
-      onSuccess?.(sig)
+      const conn = new Connection(mainnetRpc,"confirmed")
+      const sig = await conn.sendRawTransaction(signed.serialize(), { skipPreflight:false, maxRetries:3 })
+      await conn.confirmTransaction(sig,"confirmed")
+      setTxid(sig); setStatus("confirmed"); onSuccess?.(sig)
     } catch (err) {
       setStatus("failed")
       const msg = err instanceof Error ? err.message : "Transaction failed"
-      setTxError(
-        msg.includes("User rejected") || msg.includes("Plugin Closed")
-          ? "Transaction cancelled in wallet."
-          : msg
-      )
+      setTxError(msg.includes("User rejected")||msg.includes("Plugin Closed") ? "Transaction cancelled in wallet." : msg)
     }
   }
 
-  const isSubmitting =
-    status === "building" || status === "signing" || status === "sending"
-
-  const confirmLabel: Partial<Record<CardStatus, string>> = {
-    ready:     "CONFIRM DEPOSIT",
-    building:  "BUILDING TX...",
-    signing:   "SIGN IN WALLET...",
-    sending:   "BROADCASTING...",
-    confirmed: "DEPOSITED ✓",
-    failed:    "RETRY",
+  const isSubmitting = ["building","signing","sending"].includes(status)
+  const confirmLabel: Partial<Record<CardStatus,string>> = {
+    ready:"CONFIRM DEPOSIT", building:"BUILDING TX…", signing:"SIGN IN WALLET…",
+    sending:"BROADCASTING…", confirmed:"DEPOSITED ✓", failed:"RETRY",
   }
 
-  // ── Loading APY ────────────────────────────────────────────────────────────
-  if (status === "loading_apy") {
-    return (
-      <div className="bg-surface-container-low border border-outline-variant/15 rounded-lg p-5 w-full max-w-md space-y-4">
-        <CardHeader status="loading" />
-        <div className="flex items-center gap-3 py-3">
-          <span className="w-4 h-4 border-2 border-primary/40 border-t-primary rounded-full animate-spin shrink-0" />
-          <span className="font-label text-[10px] text-neutral-400 tracking-widest uppercase">
-            Loading {intent.token} yield rate from Kamino...
+  if (status === "loading_apy") return (
+    <div style={cardShell}>
+      <TopBar badge="KAMINO" label="LEND PREVIEW" status="fetching" />
+      <div style={{ padding:"20px 22px 22px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          <GreenSpinner />
+          <span style={labelSm}>Loading yield rates for {intent.token}…</span>
+        </div>
+      </div>
+    </div>
+  )
+
+  if (status === "apy_error") return (
+    <div style={cardShell}>
+      <TopBar badge="KAMINO" label="LEND PREVIEW" status="error" />
+      <div style={{ padding:"20px 22px 22px", display:"flex", flexDirection:"column", gap:14 }}>
+        <p style={{ ...labelSm, color:"rgba(255,100,80,.8)", lineHeight:1.55 }}>{apyError}</p>
+        <button style={btnRetry} onClick={() => { setApyError(null); setStatus("loading_apy") }}>RETRY</button>
+      </div>
+    </div>
+  )
+
+  return (
+    <div style={cardShell}>
+      <div style={{ position:"absolute", top:0, left:0, right:0, height:1.5,
+        background:"linear-gradient(90deg,transparent,rgba(120,240,140,.45),transparent)" }} />
+
+      <TopBar badge="KAMINO" label="LEND PREVIEW" status={apyData?.source === "estimated" ? "estimated" : "live"} accent="green" />
+
+      <div style={{ padding:"0 22px 22px", display:"flex", flexDirection:"column", gap:18 }}>
+
+        {/* Hero: deposit amount + APY */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+          <div style={heroCell}>
+            <span style={labelXs}>DEPOSIT</span>
+            <p style={heroNum}>{intent.amount}</p>
+            <span style={tokenBadge}>{intent.token}</span>
+          </div>
+          <div style={{ ...heroCell, background:"linear-gradient(135deg,rgba(80,200,100,.08),rgba(60,160,80,.04))", borderColor:"rgba(100,220,120,.14)" }}>
+            <span style={labelXs}>SUPPLY APY</span>
+            <p style={{ ...heroNum, color:"rgba(100,230,120,.95)" }}>{(apyData?.apy ?? 0).toFixed(2)}%</p>
+            <span style={{ ...tokenBadge, color:"rgba(100,220,120,.6)" }}>
+              {apyData?.source === "estimated" ? "ESTIMATED" : "LIVE RATE"}
+            </span>
+          </div>
+        </div>
+
+        {/* Projected earnings */}
+        <div style={{ background:"rgba(0,0,0,.28)", borderRadius:10, padding:"14px 16px",
+          border:"1px solid rgba(100,220,120,.07)", boxShadow:"inset 0 2px 8px rgba(0,0,0,.3)" }}>
+          <span style={{ ...labelXs, marginBottom:12 }}>PROJECTED EARNINGS ({intent.token})</span>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+            {[
+              { label:"DAILY",   value:(daily   ?? 0).toFixed(4) },
+              { label:"MONTHLY", value:(monthly ?? 0).toFixed(2) },
+              { label:"YEARLY",  value:(yearly  ?? 0).toFixed(2) },
+            ].map(({ label, value }) => (
+              <div key={label} style={{ textAlign:"center" }}>
+                <span style={labelXs}>{label}</span>
+                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".82rem", fontWeight:700,
+                  color:"rgba(100,220,120,.88)", margin:0 }}>+{value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Market stats */}
+        {(apyData?.marketSize || apyData?.utilization) && (
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            {apyData.marketSize && (
+              <div style={dataCell}><span style={labelXs}>MARKET SIZE</span><span style={dataVal}>{apyData.marketSize}</span></div>
+            )}
+            {apyData.utilization && (
+              <div style={dataCell}><span style={labelXs}>UTILIZATION</span><span style={dataVal}>{apyData.utilization}</span></div>
+            )}
+          </div>
+        )}
+
+        {/* Network badge */}
+        <div style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 12px",
+          background:"rgba(0,0,0,.22)", borderRadius:8, border:"1px solid rgba(255,185,60,.07)" }}>
+          <span style={{ width:6, height:6, borderRadius:"50%", background:"rgba(255,185,60,.6)",
+            boxShadow:"0 0 6px rgba(245,158,11,.5)", display:"inline-block", flexShrink:0,
+            animation:"blink 2.5s ease-in-out infinite" }} />
+          <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".46rem", fontWeight:600,
+            letterSpacing:".18em", textTransform:"uppercase", color:"rgba(255,215,150,.32)" }}>
+            EXECUTES ON SOLANA MAINNET · FUNDS EARN YIELD IMMEDIATELY
           </span>
         </div>
-      </div>
-    )
-  }
 
-  // ── APY error ──────────────────────────────────────────────────────────────
-  if (status === "apy_error") {
-    return (
-      <div className="bg-surface-container-low border border-outline-variant/15 rounded-lg p-5 w-full max-w-md space-y-3">
-        <CardHeader status="error" />
-        <p className="font-label text-[10px] text-error tracking-wide leading-relaxed">
-          {apyError}
-        </p>
-        <button
-          onClick={() => { setApyError(null); setStatus("loading_apy") }}
-          className="font-label text-[10px] text-primary tracking-widest uppercase border-b border-primary/40 pb-0.5"
-        >
-          RETRY
-        </button>
-      </div>
-    )
-  }
+        {txError && <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".62rem",
+          color:"rgba(255,100,80,.8)", lineHeight:1.55, margin:0 }}>{txError}</p>}
 
-  // ── Full preview ───────────────────────────────────────────────────────────
-  return (
-    <div className="bg-surface-container-low border border-outline-variant/15 rounded-lg p-5 w-full max-w-md space-y-4">
-
-      <CardHeader status="live" isEstimated={apyData?.source === "estimated"} />
-
-      {/* Hero: amount + APY */}
-      <div className="grid grid-cols-2 gap-4 items-start">
-        <div className="space-y-1">
-          <p className="font-label text-[9px] text-neutral-500 tracking-widest uppercase">DEPOSIT</p>
-          <p className="font-headline text-3xl text-on-surface">{intent.amount}</p>
-          <p className="font-label text-xs text-primary tracking-widest">{intent.token}</p>
-        </div>
-        <div className="space-y-1 text-right">
-          <p className="font-label text-[9px] text-neutral-500 tracking-widest uppercase">SUPPLY APY</p>
-          <p className="font-headline text-3xl text-primary">
-            {apyData!.supplyApy.toFixed(2)}%
-          </p>
-          <p className="font-label text-[9px] text-neutral-500 tracking-widest uppercase">
-            {apyData?.source === "estimated" ? "ESTIMATED" : "PER YEAR"}
-          </p>
-        </div>
-      </div>
-
-      {/* Projected earnings */}
-      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-outline-variant/10">
-        {[
-          { label: "DAILY",   value: (dailyEarnings ?? 0).toFixed(4) },
-          { label: "MONTHLY", value: (monthlyEarnings ?? 0).toFixed(4) },
-          { label: "YEARLY",  value: (yearlyEarnings ?? 0).toFixed(4) },
-        ].map(({ label, value }) => (
-          <div key={label}>
-            <p className="font-label text-[9px] text-neutral-500 tracking-widest uppercase">{label}</p>
-            <p className="font-body text-sm font-bold text-primary-fixed-dim mt-0.5">+{value}</p>
-            <p className="font-label text-[9px] text-neutral-600 tracking-widest uppercase mt-0.5">
-              {intent.token}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {/* Market stats */}
-      <div className="grid grid-cols-2 gap-3">
-        {apyData!.totalSupplyUsd > 0 && (
-          <div>
-            <p className="font-label text-[9px] text-neutral-500 tracking-widest uppercase">MARKET SIZE</p>
-            <p className="font-body text-sm font-bold text-on-surface/80 mt-0.5">
-              {formatUsd(apyData!.totalSupplyUsd)}
-            </p>
-          </div>
+        {status === "confirmed" && txid && (
+          <a href={`https://solscan.io/tx/${txid}`} target="_blank" rel="noopener noreferrer"
+            style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".58rem", fontWeight:600,
+              letterSpacing:".18em", textTransform:"uppercase", color:"rgba(100,220,120,.7)",
+              textDecoration:"none" }}>VIEW ON SOLSCAN →</a>
         )}
-        {apyData!.utilizationRate > 0 && (
-          <div>
-            <p className="font-label text-[9px] text-neutral-500 tracking-widest uppercase">UTILIZATION</p>
-            <p className="font-body text-sm font-bold text-on-surface/80 mt-0.5">
-              {apyData!.utilizationRate.toFixed(1)}%
-            </p>
+
+        {status !== "confirmed" && (
+          <div style={{ display:"flex", gap:10, marginTop:2 }}>
+            <button onClick={handleConfirm} disabled={isSubmitting||!publicKey}
+              style={{
+                flex:1, padding:"13px 0",
+                background:"linear-gradient(135deg,#4ade80,#22c55e 45%,#16a34a)",
+                border:"none", borderRadius:10,
+                fontFamily:"'Space Grotesk',sans-serif", fontSize:".68rem", fontWeight:700,
+                letterSpacing:".26em", textTransform:"uppercase" as const,
+                color:"#052210", cursor:"pointer",
+                boxShadow:"0 0 24px rgba(74,222,128,.45), 0 6px 20px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.3)",
+                opacity: (isSubmitting||!publicKey) ? .55 : 1,
+                transition:"transform .18s, box-shadow .18s",
+                textShadow:"0 1px 0 rgba(255,255,255,.25)",
+              }}
+              onMouseEnter={e=>{ if(!isSubmitting&&publicKey)(e.currentTarget as HTMLButtonElement).style.transform="scale(1.03) translateY(-1px)" }}
+              onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.transform="none"}}>
+              {isSubmitting && <InlineSpinner color="#052210" />}
+              {!publicKey ? "CONNECT WALLET" : (confirmLabel[status] ?? "CONFIRM DEPOSIT")}
+            </button>
+            <button onClick={onCancel} disabled={isSubmitting}
+              style={{ ...btnRetry, padding:"13px 20px", opacity:isSubmitting?.4:1 }}>CANCEL</button>
           </div>
         )}
       </div>
-
-      {/* Mainnet notice */}
-      <div className="flex items-center gap-2 py-2 px-3 bg-surface-container-highest/50 rounded">
-        <span className="w-1.5 h-1.5 rounded-full bg-secondary shrink-0" />
-        <p className="font-label text-[9px] text-neutral-500 tracking-widest uppercase">
-          Executes on Solana mainnet · Funds earn yield immediately
-        </p>
-      </div>
-
-      {/* Tx error */}
-      {txError && (
-        <p className="font-label text-[10px] text-error tracking-wide leading-relaxed">
-          {txError}
-        </p>
-      )}
-
-      {/* Solscan link on success */}
-      {status === "confirmed" && txid && (
-        <a
-          href={`https://solscan.io/tx/${txid}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block font-label text-[10px] text-tertiary tracking-widest uppercase hover:text-tertiary/80 transition-colors"
-        >
-          VIEW ON SOLSCAN →
-        </a>
-      )}
-
-      {/* Action buttons */}
-      {status !== "confirmed" && (
-        <div className="flex items-center gap-3 pt-1">
-          <button
-            onClick={handleConfirm}
-            disabled={isSubmitting || !publicKey}
-            className="relative group flex-1 py-3 bg-gradient-to-r from-primary to-primary-container text-on-primary font-label font-bold tracking-[0.2em] text-xs uppercase rounded shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-          >
-            <span className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 rounded transition-opacity" />
-            {isSubmitting && (
-              <span className="inline-block w-3 h-3 border-2 border-on-primary/40 border-t-on-primary rounded-full animate-spin mr-2 align-middle" />
-            )}
-            {!publicKey ? "CONNECT WALLET" : (confirmLabel[status] ?? "CONFIRM DEPOSIT")}
-          </button>
-          <button
-            onClick={onCancel}
-            disabled={isSubmitting}
-            className="font-label text-[10px] text-neutral-500 hover:text-primary tracking-widest uppercase border-b border-transparent hover:border-primary/40 pb-0.5 transition-all disabled:opacity-30"
-          >
-            CANCEL
-          </button>
-        </div>
-      )}
     </div>
   )
 }
 
-// ─── CardHeader ───────────────────────────────────────────────────────────────
-
-function CardHeader({
-  status,
-  isEstimated,
-}: {
-  status: "loading" | "live" | "error"
-  isEstimated?: boolean
-}) {
+function TopBar({ badge, label, status, accent="amber" }: { badge:string; label:string; status:string; accent?:string }) {
+  const isGreen = accent === "green"
+  const dotColor = status==="live" ? (isGreen?"#55FF88":"#55FF99") : status==="estimated" ? "#FFB95F" : status==="error" ? "#FF6B6B" : "#B1CFF6"
+  const dotLabel = status==="fetching"?"FETCHING":status==="estimated"?"ESTIMATED":status==="error"?"ERROR":"LIVE"
+  const badgeColor = isGreen ? "rgba(100,220,120," : "rgba(255,185,60,"
   return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        <span className="px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-full font-label text-[10px] text-primary tracking-widest uppercase">
-          Kamino
-        </span>
-        <span className="font-label text-[10px] text-neutral-500 tracking-widest uppercase">
-          LEND PREVIEW
-        </span>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+      padding:"14px 22px", borderBottom:`1px solid ${badgeColor}.07)` }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+        <span style={{ padding:"3px 10px", background:`${badgeColor}.08)`, border:`1px solid ${badgeColor}.2)`,
+          borderRadius:20, fontFamily:"'Space Grotesk',sans-serif",
+          fontSize:".52rem", fontWeight:700, letterSpacing:".18em",
+          textTransform:"uppercase", color:`${badgeColor}.88)` }}>{badge}</span>
+        <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".52rem", fontWeight:600,
+          letterSpacing:".18em", textTransform:"uppercase", color:"rgba(255,215,150,.3)" }}>{label}</span>
       </div>
-      {status !== "error" && (
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse" />
-          <span className="font-label text-[9px] text-tertiary tracking-widest uppercase">
-            {status === "loading" ? "FETCHING" : isEstimated ? "ESTIMATED" : "LIVE"}
-          </span>
-        </div>
-      )}
+      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+        <span style={{ width:6, height:6, borderRadius:"50%", background:dotColor,
+          boxShadow:`0 0 7px ${dotColor}`, display:"inline-block",
+          animation:"blink 2s ease-in-out infinite" }} />
+        <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".46rem", fontWeight:600,
+          letterSpacing:".2em", textTransform:"uppercase", color:`${dotColor}99` }}>{dotLabel}</span>
+      </div>
     </div>
   )
+}
+
+function GreenSpinner() {
+  return <span style={{ width:14, height:14, border:"2px solid rgba(100,220,120,.2)",
+    borderTop:"2px solid rgba(100,220,120,.85)", borderRadius:"50%",
+    display:"inline-block", animation:"spin .8s linear infinite", flexShrink:0 }} />
+}
+
+function InlineSpinner({ color="#1a0c00" }: { color?:string }) {
+  return <span style={{ width:11, height:11, border:`2px solid ${color}33`,
+    borderTop:`2px solid ${color}ee`, borderRadius:"50%",
+    display:"inline-block", animation:"spin .8s linear infinite",
+    marginRight:8, verticalAlign:"middle" }} />
+}
+
+const labelXs: React.CSSProperties = {
+  fontFamily:"'Space Grotesk',sans-serif", fontSize:".44rem", fontWeight:600,
+  letterSpacing:".22em", textTransform:"uppercase", color:"rgba(255,215,150,.28)",
+  display:"block", marginBottom:5,
+}
+const labelSm: React.CSSProperties = {
+  fontFamily:"'Space Grotesk',sans-serif", fontSize:".6rem", color:"rgba(255,215,150,.4)", letterSpacing:".06em",
+}
+const heroCell: React.CSSProperties = {
+  padding:"14px 14px", background:"rgba(0,0,0,.28)", borderRadius:10,
+  border:"1px solid rgba(255,185,60,.08)", boxShadow:"inset 0 2px 8px rgba(0,0,0,.3)",
+}
+const heroNum: React.CSSProperties = {
+  fontFamily:"'Noto Serif',serif", fontSize:"1.9rem", fontWeight:400,
+  color:"#E5E2E1", lineHeight:1.1, margin:"4px 0 4px",
+}
+const tokenBadge: React.CSSProperties = {
+  fontFamily:"'Space Grotesk',sans-serif", fontSize:".64rem", fontWeight:700,
+  letterSpacing:".12em", color:"rgba(255,185,60,.88)",
+}
+const dataCell: React.CSSProperties = {
+  padding:"10px 12px", background:"rgba(0,0,0,.22)",
+  border:"1px solid rgba(100,220,120,.06)", borderRadius:8, display:"flex", flexDirection:"column",
+}
+const dataVal: React.CSSProperties = {
+  fontFamily:"'Space Grotesk',sans-serif", fontSize:".78rem", fontWeight:700,
+  letterSpacing:".08em", color:"rgba(100,220,120,.82)",
+}
+const btnRetry: React.CSSProperties = {
+  padding:"8px 16px", background:"rgba(255,255,255,.04)",
+  border:"1px solid rgba(255,185,60,.14)", borderRadius:10,
+  fontFamily:"'Space Grotesk',sans-serif", fontSize:".62rem", fontWeight:600,
+  letterSpacing:".22em", textTransform:"uppercase" as const,
+  color:"rgba(255,200,140,.4)", cursor:"pointer",
+  boxShadow:"0 4px 14px rgba(0,0,0,.45)",
 }

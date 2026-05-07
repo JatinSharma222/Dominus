@@ -36,6 +36,7 @@ export default function LandingPage() {
 
   const fireRef     = useRef<HTMLCanvasElement>(null)
   const particleRef = useRef<HTMLCanvasElement>(null)
+  const auroraRef   = useRef<HTMLCanvasElement>(null)   // NEW — aurora nebula bg
   const portalRef   = useRef<HTMLDivElement>(null)
   const heroTextRef = useRef<HTMLDivElement>(null)
   const lHudRef     = useRef<HTMLDivElement>(null)
@@ -82,7 +83,119 @@ export default function LandingPage() {
 
   useEffect(() => startRAF(), [startRAF])
 
-  // Doom fire
+  // ── AURORA NEBULA BACKGROUND ─────────────────────────────────────────────
+  // Replaces generic CSS circles with flowing energy ribbons + depth fog
+  useEffect(() => {
+    const canvas = auroraRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    const resize = () => {
+      canvas.width  = window.innerWidth
+      canvas.height = window.innerHeight
+    }
+    resize()
+    window.addEventListener("resize", resize, { passive: true })
+
+    // Each ribbon is a bezier-traced sinusoidal energy band
+    type Ribbon = {
+      phase: number
+      speed: number
+      amplitude: number
+      yBase: number
+      hue: number      // 20–42 for amber/orange range
+      alpha: number
+      width: number
+      waveLen: number
+    }
+
+    const ribbons: Ribbon[] = Array.from({ length: 18 }, (_, i) => ({
+      phase:     Math.random() * Math.PI * 2,
+      speed:     0.0004 + Math.random() * 0.0006,
+      amplitude: 40  + Math.random() * 120,
+      yBase:     0.25 + (i / 18) * 0.55,
+      hue:       18  + Math.random() * 26,
+      alpha:     0.012 + Math.random() * 0.028,
+      width:     60  + Math.random() * 180,
+      waveLen:   0.003 + Math.random() * 0.004,
+    }))
+
+    // Floating orbs — depth blobs that pulse
+    type Orb = { x: number; y: number; r: number; phase: number; speed: number; hue: number; alpha: number }
+    const orbs: Orb[] = Array.from({ length: 6 }, () => ({
+      x:     0.2 + Math.random() * 0.6,
+      y:     0.2 + Math.random() * 0.6,
+      r:     120 + Math.random() * 220,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.0003 + Math.random() * 0.0004,
+      hue:   16 + Math.random() * 30,
+      alpha: 0.04 + Math.random() * 0.06,
+    }))
+
+    let t = 0, raf: number
+    const draw = () => {
+      t++
+      const W = canvas.width, H = canvas.height
+      ctx.clearRect(0, 0, W, H)
+
+      // 1 — pulsing depth orbs (the "nebula clouds")
+      orbs.forEach(orb => {
+        const pulse = 0.7 + 0.3 * Math.sin(t * orb.speed * 1000 + orb.phase)
+        const r = orb.r * pulse
+        const x = orb.x * W + Math.sin(t * orb.speed * 800 + orb.phase) * 40
+        const y = orb.y * H + Math.cos(t * orb.speed * 600 + orb.phase) * 30
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r)
+        g.addColorStop(0,   `hsla(${orb.hue},100%,55%,${orb.alpha * pulse})`)
+        g.addColorStop(0.4, `hsla(${orb.hue},90%,40%,${orb.alpha * 0.5 * pulse})`)
+        g.addColorStop(1,   `hsla(${orb.hue},80%,20%,0)`)
+        ctx.beginPath()
+        ctx.arc(x, y, r, 0, Math.PI * 2)
+        ctx.fillStyle = g
+        ctx.fill()
+      })
+
+      // 2 — energy ribbons (flowing sine bands)
+      ribbons.forEach(rb => {
+        const yc = rb.yBase * H
+        const steps = Math.ceil(W / 6)
+        ctx.beginPath()
+        for (let s = 0; s <= steps; s++) {
+          const x = (s / steps) * W
+          const y = yc + Math.sin(x * rb.waveLen + t * rb.speed * 1000 + rb.phase) * rb.amplitude
+          s === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+        }
+        ctx.strokeStyle = `hsla(${rb.hue},100%,62%,${rb.alpha})`
+        ctx.lineWidth   = rb.width
+        ctx.filter      = "blur(38px)"
+        ctx.stroke()
+        ctx.filter      = "none"
+      })
+
+      // 3 — thin sharp energy filaments on top
+      ribbons.slice(0, 8).forEach(rb => {
+        const yc = rb.yBase * H
+        ctx.beginPath()
+        const steps = Math.ceil(W / 4)
+        for (let s = 0; s <= steps; s++) {
+          const x = (s / steps) * W
+          const y = yc + Math.sin(x * rb.waveLen * 1.6 + t * rb.speed * 1200 + rb.phase + 0.8) * rb.amplitude * 0.6
+          s === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+        }
+        ctx.strokeStyle = `hsla(${rb.hue + 10},100%,78%,${rb.alpha * 0.6})`
+        ctx.lineWidth   = 1.5
+        ctx.filter      = "blur(3px)"
+        ctx.stroke()
+        ctx.filter      = "none"
+      })
+
+      raf = requestAnimationFrame(draw)
+    }
+    draw()
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize) }
+  }, [])
+
+  // ── DOOM FIRE ────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = fireRef.current
     if (!canvas) return
@@ -124,7 +237,7 @@ export default function LandingPage() {
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  // Particles
+  // ── PARTICLES ────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = particleRef.current
     if (!canvas) return
@@ -136,47 +249,42 @@ export default function LandingPage() {
     type P = { x:number;y:number;vx:number;vy:number;r:number;op:number;life:number;maxLife:number;ember:boolean }
     const pts: P[] = Array.from({ length: 90 }, (_, i) => {
       const ember = i < 55
-      return {
-        x: 0, y: 0, vx: (Math.random() - 0.5) * (ember ? 0.9 : 0.3),
-        vy: ember ? -(Math.random() * 1.8 + 0.5) : (Math.random() - 0.5) * 0.2,
-        r: Math.random() * (ember ? 2.2 : 1.3) + 0.4,
-        op: Math.random() * 0.7 + 0.15,
-        life: Math.random() * 160, maxLife: 130 + Math.random() * 130, ember,
-      }
+      return { x:0,y:0, vx:(Math.random()-0.5)*(ember?0.9:0.3), vy:ember?-(Math.random()*1.8+0.5):(Math.random()-0.5)*0.2,
+        r:Math.random()*(ember?2.2:1.3)+0.4, op:Math.random()*0.7+0.15, life:Math.random()*160, maxLife:130+Math.random()*130, ember }
     })
     let raf: number
     const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      const cx = canvas.width * 0.5, cy = canvas.height * 0.5
-      const mx = mouse.current.x, my = mouse.current.y
+      ctx.clearRect(0,0,canvas.width,canvas.height)
+      const cx=canvas.width*0.5, cy=canvas.height*0.5
+      const mx=mouse.current.x, my=mouse.current.y
       pts.forEach(p => {
-        if (p.life === 0 || p.life > p.maxLife) {
-          p.x = cx + (Math.random() - 0.5) * (p.ember ? 200 : 480)
-          p.y = cy + (p.ember ? 80 + Math.random() * 100 : (Math.random() - 0.5) * 280)
-          p.life = 0
+        if (p.life===0||p.life>p.maxLife){
+          p.x=cx+(Math.random()-0.5)*(p.ember?200:480)
+          p.y=cy+(p.ember?80+Math.random()*100:(Math.random()-0.5)*280)
+          p.life=0
         }
         p.life++
-        const frac = p.life / p.maxLife
-        const fade = frac < 0.15 ? frac / 0.15 : frac > 0.75 ? 1 - (frac - 0.75) / 0.25 : 1
-        const al   = p.op * fade
-        p.x += p.vx + mx * 0.007 + (Math.random() - 0.5) * 0.14
-        p.y += p.vy + my * 0.005
-        if (p.ember && p.r > 1.2) {
-          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 5)
-          g.addColorStop(0, `rgba(255,200,60,${al * 0.5})`); g.addColorStop(1, "transparent")
-          ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 5, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill()
+        const frac=p.life/p.maxLife
+        const fade=frac<0.15?frac/0.15:frac>0.75?1-(frac-0.75)/0.25:1
+        const al=p.op*fade
+        p.x+=p.vx+mx*0.007+(Math.random()-0.5)*0.14
+        p.y+=p.vy+my*0.005
+        if(p.ember&&p.r>1.2){
+          const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*5)
+          g.addColorStop(0,`rgba(255,200,60,${al*0.5})`); g.addColorStop(1,"transparent")
+          ctx.beginPath(); ctx.arc(p.x,p.y,p.r*5,0,Math.PI*2); ctx.fillStyle=g; ctx.fill()
         }
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2)
-        ctx.fillStyle = p.ember ? `rgba(255,${180 + Math.floor(frac * 60)},${Math.floor(frac * 80)},${al})` : `rgba(255,185,60,${al * 0.4})`
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2)
+        ctx.fillStyle=p.ember?`rgba(255,${180+Math.floor(frac*60)},${Math.floor(frac*80)},${al})`:`rgba(255,185,60,${al*0.4})`
         ctx.fill()
       })
-      raf = requestAnimationFrame(draw)
+      raf=requestAnimationFrame(draw)
     }
     draw()
-    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize) }
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("resize",resize) }
   }, [])
 
-  if (!mounted) return <div style={{ background: "#060300", width: "100vw", height: "100vh" }} />
+  if (!mounted) return <div style={{ background:"#060300", width:"100vw", height:"100vh" }} />
 
   const network = process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet-beta" ? "MAINNET" : "DEVNET"
 
@@ -194,12 +302,27 @@ export default function LandingPage() {
           0%,100%{filter:drop-shadow(0 0 22px rgba(245,158,11,.8)) drop-shadow(0 0 65px rgba(245,120,10,.32))}
           50%{filter:drop-shadow(0 0 48px rgba(255,205,20,1)) drop-shadow(0 0 115px rgba(245,140,10,.52))}
         }
+        /* Portal aura — orange light bleeding from behind */
         @keyframes portalAura{
-          0%,100%{box-shadow:0 0 90px rgba(245,130,10,.4),0 0 220px rgba(245,100,5,.2),inset 0 0 70px rgba(255,150,20,.1)}
-          50%{box-shadow:0 0 140px rgba(255,165,20,.58),0 0 340px rgba(245,120,10,.3),inset 0 0 110px rgba(255,185,35,.16)}
+          0%,100%{
+            box-shadow:
+              0 0 0 1px rgba(255,200,80,.12),
+              0 0 60px 10px rgba(245,130,10,.55),
+              0 0 130px 30px rgba(245,100,5,.3),
+              0 0 260px 60px rgba(220,80,5,.15),
+              0 50px 120px rgba(0,0,0,.9),
+              inset 0 0 60px rgba(255,150,20,.1)
+          }
+          50%{
+            box-shadow:
+              0 0 0 1px rgba(255,215,80,.18),
+              0 0 90px 18px rgba(255,165,20,.72),
+              0 0 200px 50px rgba(245,120,10,.4),
+              0 0 380px 80px rgba(220,90,5,.2),
+              0 50px 120px rgba(0,0,0,.9),
+              inset 0 0 100px rgba(255,185,35,.16)
+          }
         }
-        @keyframes ringCW{to{transform:translate(-50%,-50%) rotate(360deg)}}
-        @keyframes ringCCW{to{transform:translate(-50%,-50%) rotate(-360deg)}}
         @keyframes blink{0%,100%{opacity:1}50%{opacity:.14}}
         @keyframes beamPulse{0%,100%{opacity:.22}50%{opacity:.72}}
         @keyframes floatY{0%,100%{transform:translateY(0) rotate(45deg)}50%{transform:translateY(-11px) rotate(45deg)}}
@@ -228,16 +351,20 @@ export default function LandingPage() {
           -webkit-backdrop-filter:blur(28px) saturate(1.6) brightness(1.06);
           border:1px solid rgba(255,185,60,.2);
           border-top:1px solid rgba(255,255,255,.14);
-          box-shadow:inset 0 1.5px 0 rgba(255,255,255,.09),inset 0 -1px 0 rgba(0,0,0,.18),0 10px 50px rgba(0,0,0,.68),0 0 32px rgba(245,158,11,.055);
-          position:relative;overflow:hidden;border-radius:3px;
+          box-shadow:
+            inset 0 1.5px 0 rgba(255,255,255,.09),
+            inset 0 -1px 0 rgba(0,0,0,.18),
+            0 10px 50px rgba(0,0,0,.68),
+            0 0 32px rgba(245,158,11,.055);
+          position:relative;overflow:hidden;border-radius:12px;
         }
         .glass::before{
-          content:'';position:absolute;inset:0;pointer-events:none;
+          content:'';position:absolute;inset:0;pointer-events:none;border-radius:12px;
           background:linear-gradient(108deg,transparent 24%,rgba(255,255,255,.062) 50%,transparent 76%);
           background-size:250% 100%;animation:shimmerSweep 11s ease-in-out infinite;
         }
-        .glass-top{position:absolute;top:0;left:0;right:0;height:1.5px;background:linear-gradient(90deg,transparent,rgba(255,205,70,.58),transparent)}
-        .glass-bot{position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,185,60,.22),transparent)}
+        .glass-top{position:absolute;top:0;left:0;right:0;height:1.5px;background:linear-gradient(90deg,transparent,rgba(255,205,70,.58),transparent);border-radius:12px 12px 0 0}
+        .glass-bot{position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,185,60,.22),transparent);border-radius:0 0 12px 12px}
 
         .nav-glass{
           background:linear-gradient(180deg,rgba(5,2,0,.84) 0%,rgba(3,1,0,.65) 100%);
@@ -257,13 +384,13 @@ export default function LandingPage() {
           font-family:'Space Grotesk',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.3em;text-transform:uppercase;
           color:#120700;
           background:linear-gradient(135deg,#FFE980 0%,#FFD060 16%,#FFAC10 55%,#F59E0B 74%,#D97706 100%);
-          border:none;border-radius:2px;cursor:pointer;overflow:hidden;
+          border:none;border-radius:10px;cursor:pointer;overflow:hidden;
           box-shadow:0 0 0 1px rgba(255,215,80,.28),0 0 44px rgba(245,158,11,.72),0 0 95px rgba(245,128,10,.28),0 6px 30px rgba(0,0,0,.72),inset 0 1.5px 0 rgba(255,255,255,.5),inset 0 -1px 0 rgba(0,0,0,.22);
           transition:transform .22s cubic-bezier(.22,1,.36,1),box-shadow .22s;
           text-shadow:0 1px 0 rgba(255,255,255,.38);
         }
-        .btn-cta::before{content:'';position:absolute;inset:-3px;border:1px solid rgba(255,220,80,.7);border-radius:4px;filter:blur(5px);pointer-events:none;animation:beamPulse 2.8s ease-in-out infinite}
-        .btn-cta:hover{transform:scale(1.058) translateY(-2px);box-shadow:0 0 0 1px rgba(255,220,80,.5),0 0 62px rgba(255,185,10,.98),0 0 145px rgba(245,140,10,.44),0 20px 55px rgba(0,0,0,.75),inset 0 1.5px 0 rgba(255,255,255,.5),inset 0 -1px 0 rgba(0,0,0,.22)}
+        .btn-cta::before{content:'';position:absolute;inset:-3px;border:1px solid rgba(255,220,80,.7);border-radius:13px;filter:blur(5px);pointer-events:none;animation:beamPulse 2.8s ease-in-out infinite}
+        .btn-cta:hover{transform:scale(1.055) translateY(-2px);box-shadow:0 0 0 1px rgba(255,220,80,.5),0 0 62px rgba(255,185,10,.98),0 0 145px rgba(245,140,10,.44),0 20px 55px rgba(0,0,0,.75),inset 0 1.5px 0 rgba(255,255,255,.5),inset 0 -1px 0 rgba(0,0,0,.22)}
         .btn-cta:active{transform:scale(.97)}
         .btn-shine{position:absolute;inset:0;background:linear-gradient(108deg,transparent 28%,rgba(255,255,255,.26) 50%,transparent 72%);background-size:250% 100%;background-position:250% 0;transition:background-position .5s}
         .btn-cta:hover .btn-shine{background-position:-250% 0}
@@ -283,11 +410,13 @@ export default function LandingPage() {
           background:linear-gradient(135deg,rgba(255,255,255,.05) 0%,rgba(255,185,55,.02) 100%);
           backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
           border:1px solid rgba(255,185,60,.12);border-top:1px solid rgba(255,255,255,.08);
-          border-radius:2px;transition:border-color .25s,box-shadow .25s,transform .25s cubic-bezier(.22,1,.36,1);
+          border-radius:10px;
+          transition:border-color .25s,box-shadow .25s,transform .25s cubic-bezier(.22,1,.36,1);
+          box-shadow:0 4px 20px rgba(0,0,0,.4);
         }
-        .proto:hover{border-color:rgba(255,185,60,.3);box-shadow:0 0 22px rgba(245,158,11,.1),0 6px 30px rgba(0,0,0,.5);transform:translateY(-2px)}
+        .proto:hover{border-color:rgba(255,185,60,.3);box-shadow:0 0 22px rgba(245,158,11,.12),0 8px 32px rgba(0,0,0,.55);transform:translateY(-2px)}
 
-        .stat-pill{display:flex;flex-direction:column;align-items:center;gap:4px;padding:.65rem 1.3rem;background:rgba(255,185,60,.038);border:1px solid rgba(255,185,60,.1);border-radius:2px;transition:border-color .2s,background .2s}
+        .stat-pill{display:flex;flex-direction:column;align-items:center;gap:4px;padding:.65rem 1.3rem;background:rgba(255,185,60,.038);border:1px solid rgba(255,185,60,.1);border-radius:10px;transition:border-color .2s,background .2s;box-shadow:0 4px 18px rgba(0,0,0,.38)}
         .stat-pill:hover{border-color:rgba(255,185,60,.24);background:rgba(255,185,60,.062)}
 
         .feed-wrap{height:90px;overflow:hidden;position:relative}
@@ -308,14 +437,12 @@ export default function LandingPage() {
           transform-origin:50% 100%;
         }
 
-        /* Portal image wrapper */
-        .portal-img-wrap{
-          position:relative;overflow:hidden;border-radius:4px;
-          border:1.5px solid rgba(255,175,50,.22);
+        /* ── PORTAL image box ── */
+        .portal-box{
+          position:relative;overflow:hidden;
+          border-radius:12px;
           animation:portalAura 5.5s ease-in-out infinite;
         }
-        /* Rings absolutely positioned around the portal */
-        .ring{position:absolute;border-radius:50%;top:50%;left:50%;pointer-events:none}
 
         .wallet-adapter-dropdown,.wallet-adapter-button-trigger,[class*="wallet-adapter-dropdown"]{display:none!important}
         ::-webkit-scrollbar{width:3px}
@@ -325,17 +452,19 @@ export default function LandingPage() {
         ::selection{background:rgba(255,193,116,.22)}
       `}</style>
 
-      {/* ══════════════ ROOT */}
       <div style={{ position:"fixed", inset:0, background:"#060300", overflow:"hidden" }}>
 
-        {/* Sky */}
+        {/* Sky base */}
         <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse 75% 55% at 50% 36%,#2c1500 0%,#190e00 28%,#0e0700 52%,#050200 75%,#020100 100%)" }} />
 
+        {/* ── AURORA NEBULA CANVAS (replaces generic CSS circles) ── */}
+        <canvas ref={auroraRef} style={{ position:"absolute", inset:0, zIndex:1, pointerEvents:"none", mixBlendMode:"screen" }} />
+
         {/* HUD grid */}
-        <div className="hud-grid" style={{ position:"absolute", inset:0, opacity:.15, pointerEvents:"none", zIndex:1 }} />
+        <div className="hud-grid" style={{ position:"absolute", inset:0, opacity:.14, pointerEvents:"none", zIndex:2 }} />
 
         {/* Floor grid */}
-        <div style={{ position:"absolute", bottom:0, left:"-8%", right:"-8%", height:"44vh", zIndex:2, pointerEvents:"none", opacity:.2 }}>
+        <div style={{ position:"absolute", bottom:0, left:"-8%", right:"-8%", height:"44vh", zIndex:2, pointerEvents:"none", opacity:.18 }}>
           <div className="floor-grid" style={{ position:"absolute", inset:0 }} />
         </div>
 
@@ -366,18 +495,18 @@ export default function LandingPage() {
 
         {/* Corner brackets */}
         {[
-          { t:62,  l:14, bt:true, bl:true, dt:".4s" },
-          { t:62,  r:14, bt:true, br:true, dt:".5s" },
+          { t:62, l:14, bt:true, bl:true, dt:".4s" },
+          { t:62, r:14, bt:true, br:true, dt:".5s" },
           { b:38, l:14, bb:true, bl:true, dt:".6s" },
           { b:38, r:14, bb:true, br:true, dt:".7s" },
         ].map((c, i) => (
           <div key={i} style={{
             position:"fixed", width:22, height:22, pointerEvents:"none", zIndex:15,
             animation:`cornerIn .7s ease-out ${c.dt} both`,
-            top:    "t" in c ? c.t : undefined,
-            bottom: "b" in c ? c.b : undefined,
-            left:   "l" in c ? c.l : undefined,
-            right:  "r" in c ? c.r : undefined,
+            top:    "t" in c ? (c as {t:number}).t : undefined,
+            bottom: "b" in c ? (c as {b:number}).b : undefined,
+            left:   "l" in c ? (c as {l:number}).l : undefined,
+            right:  "r" in c ? (c as {r:number}).r : undefined,
             borderTop:    c.bt ? "1px solid rgba(255,185,60,.38)" : undefined,
             borderBottom: c.bb ? "1px solid rgba(255,185,60,.38)" : undefined,
             borderLeft:   c.bl ? "1px solid rgba(255,185,60,.38)" : undefined,
@@ -393,7 +522,7 @@ export default function LandingPage() {
         }}>
           <div style={{ display:"flex", alignItems:"center", gap:"1.8rem" }}>
             <div style={{ display:"flex", alignItems:"center", gap:9 }}>
-              <div style={{ width:27, height:27, borderRadius:3, overflow:"hidden", flexShrink:0,
+              <div style={{ width:27, height:27, borderRadius:8, overflow:"hidden", flexShrink:0,
                 border:"1px solid rgba(255,185,60,.36)", boxShadow:"0 0 11px rgba(245,158,11,.48)" }}>
                 <img src={AETHER_IMG} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}
                   onError={e => { (e.currentTarget as HTMLImageElement).style.display="none" }} />
@@ -406,7 +535,7 @@ export default function LandingPage() {
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             <div style={{ display:"flex", alignItems:"center", gap:6, padding:".28rem .72rem",
-              background:"rgba(255,185,60,.06)", border:"1px solid rgba(255,185,60,.11)", borderRadius:2 }}>
+              background:"rgba(255,185,60,.06)", border:"1px solid rgba(255,185,60,.11)", borderRadius:8 }}>
               <span style={{ width:5, height:5, borderRadius:"50%", background:"#55FF88",
                 boxShadow:"0 0 7px rgba(80,255,130,.92)", display:"inline-block", animation:"blink 2.2s ease-in-out infinite" }} />
               <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".43rem", fontWeight:600,
@@ -428,9 +557,7 @@ export default function LandingPage() {
         </nav>
 
         {/* ══ LEFT HUD */}
-        <div ref={lHudRef} className="a1" style={{
-          position:"fixed", left:"1.15rem", top:"50%", zIndex:20, willChange:"transform",
-        }}>
+        <div ref={lHudRef} className="a1" style={{ position:"fixed", left:"1.15rem", top:"50%", zIndex:20, willChange:"transform" }}>
           <div className="glass" style={{ padding:"1.25rem 1.05rem", minWidth:138, display:"flex", flexDirection:"column", gap:"1.15rem" }}>
             <div className="glass-top" />
             {[
@@ -453,8 +580,8 @@ export default function LandingPage() {
               <span className="hl" style={{ marginBottom:7 }}>LIVE FEED</span>
               <div className="feed-wrap">
                 <div className="feed-inner" style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                  {["[14:22] Jupiter 8-hop route","[14:19] Kamino APY 5.8%","[14:15] Jito MEV +0.003 SOL","[14:08] Streamflow #4421","[14:01] Portfolio: $4,218","[13:55] SOL→USDC OK","[14:22] Jupiter 8-hop route","[14:19] Kamino APY 5.8%"].map((l,i) => (
-                    <p key={i} style={{ margin:0, fontFamily:"'Space Grotesk',sans-serif", fontSize:".41rem", letterSpacing:".07em", color:"rgba(255,185,60,.3)", lineHeight:1.44 }}>{l}</p>
+                  {["[14:22] Jupiter 8-hop route","[14:19] Kamino APY 5.8%","[14:15] Jito MEV +0.003 SOL","[14:08] Streamflow #4421","[14:01] Portfolio: $4,218","[13:55] SOL→USDC OK","[14:22] Jupiter 8-hop route","[14:19] Kamino APY 5.8%"].map((ln,i) => (
+                    <p key={i} style={{ margin:0, fontFamily:"'Space Grotesk',sans-serif", fontSize:".41rem", letterSpacing:".07em", color:"rgba(255,185,60,.3)", lineHeight:1.44 }}>{ln}</p>
                   ))}
                 </div>
               </div>
@@ -464,16 +591,14 @@ export default function LandingPage() {
         </div>
 
         {/* ══ RIGHT HUD */}
-        <div ref={rHudRef} className="a1" style={{
-          position:"fixed", right:"1.15rem", top:"50%", zIndex:20, willChange:"transform",
-        }}>
+        <div ref={rHudRef} className="a1" style={{ position:"fixed", right:"1.15rem", top:"50%", zIndex:20, willChange:"transform" }}>
           <div className="glass" style={{ padding:"1.25rem 1.05rem", minWidth:138, display:"flex", flexDirection:"column", gap:"1.15rem", alignItems:"flex-end" }}>
             <div className="glass-top" />
             <div style={{ textAlign:"right" }}>
               <span className="hl">SIGNAL</span>
               <div style={{ display:"flex", alignItems:"flex-end", gap:3, justifyContent:"flex-end", marginTop:6 }}>
                 {[7,11,16,20,15].map((h,i) => (
-                  <div key={i} style={{ width:5, height:h, borderRadius:1,
+                  <div key={i} style={{ width:5, height:h, borderRadius:2,
                     background: i<4 ? "rgba(255,185,60,.88)" : "rgba(255,185,60,.16)",
                     boxShadow: i<4 ? "0 0 5px rgba(245,158,11,.52)" : "none" }} />
                 ))}
@@ -497,18 +622,15 @@ export default function LandingPage() {
           display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
           paddingTop:60, paddingBottom:38,
         }}>
-
-          {/* Wordmark */}
-          <div ref={heroTextRef} style={{ textAlign:"center", willChange:"transform", transformStyle:"preserve-3d", zIndex:2, marginBottom:"1.2rem" }}>
-
-            {/* Status tag */}
+          {/* Wordmark block */}
+          <div ref={heroTextRef} style={{ textAlign:"center", willChange:"transform", transformStyle:"preserve-3d", zIndex:2, marginBottom:"1rem" }}>
             <div className="a0" style={{
               display:"inline-flex", alignItems:"center", gap:9, padding:".36rem .95rem",
               background:"linear-gradient(135deg,rgba(255,255,255,.055),rgba(255,185,55,.02))",
               backdropFilter:"blur(14px)", WebkitBackdropFilter:"blur(14px)",
               border:"1px solid rgba(255,185,60,.15)", borderTop:"1px solid rgba(255,255,255,.11)",
-              borderRadius:2, marginBottom:"1.2rem",
-              boxShadow:"inset 0 1px 0 rgba(255,255,255,.06),0 4px 20px rgba(0,0,0,.44)",
+              borderRadius:10, marginBottom:"1.1rem",
+              boxShadow:"inset 0 1px 0 rgba(255,255,255,.06),0 4px 20px rgba(0,0,0,.44),0 0 20px rgba(245,158,11,.06)",
             }}>
               <span style={{ width:5, height:5, borderRadius:"50%", background:"#66FF99",
                 boxShadow:"0 0 7px rgba(80,255,130,.95)", display:"inline-block", animation:"blink 2s ease-in-out infinite" }} />
@@ -520,7 +642,6 @@ export default function LandingPage() {
                 boxShadow:"0 0 7px rgba(80,255,130,.95)", display:"inline-block", animation:"blink 2s ease-in-out .85s infinite" }} />
             </div>
 
-            {/* DOMINUS */}
             <h1 className="a1" style={{
               fontFamily:"'Noto Serif',serif", fontWeight:400, lineHeight:.86,
               letterSpacing:"-.025em", margin:0, userSelect:"none",
@@ -532,52 +653,47 @@ export default function LandingPage() {
               <span style={{ display:"inline-block", animation:"glitch 22s ease-in-out infinite" }}>DOMINUS</span>
             </h1>
 
-            {/* Subtitle */}
             <p className="a2" style={{
               fontFamily:"'Noto Serif',serif", fontStyle:"italic",
               fontSize:"clamp(.7rem,1.35vw,.92rem)", letterSpacing:".24em",
-              color:"rgba(188,218,255,.4)", marginTop:".9rem",
+              color:"rgba(188,218,255,.4)", marginTop:".8rem",
               textShadow:"0 2px 16px rgba(0,0,0,.95)",
             }}>Sanctum of the Eternal Gate</p>
           </div>
 
-          {/* ══ THE 3D PORTAL */}
-          <div className="a2" style={{ position:"relative", zIndex:1, marginBottom:"1.2rem" }}>
+          {/* ── PORTAL IMAGE ── */}
+          <div className="a2" style={{ position:"relative", zIndex:1, marginBottom:"1.1rem" }}>
 
-            {/* Outer haze glow */}
+            {/* Far back glow haze */}
             <div style={{
               position:"absolute", top:"5%", left:"50%", transform:"translateX(-50%)",
-              width:"140%", height:"72%",
-              background:"radial-gradient(ellipse,rgba(255,125,18,.24) 0%,rgba(245,100,5,.08) 48%,transparent 72%)",
-              filter:"blur(60px)", pointerEvents:"none", zIndex:0,
+              width:"160%", height:"80%",
+              background:"radial-gradient(ellipse,rgba(255,120,15,.3) 0%,rgba(245,95,5,.1) 44%,transparent 70%)",
+              filter:"blur(70px)", pointerEvents:"none", zIndex:0,
             }} />
 
             {/* 3D parallax wrapper */}
-            <div ref={portalRef} style={{
-              position:"relative", willChange:"transform", transformStyle:"preserve-3d",
-            }}>
+            <div ref={portalRef} style={{ position:"relative", willChange:"transform", transformStyle:"preserve-3d" }}>
 
-              {/* Orbital rings — positioned relative to centre of portal image */}
-              {[
-                { s:300, dur:4,    dir:"ringCW",   op:.44, w:1.5, c:"245,158,11" },
-                { s:400, dur:7,    dir:"ringCCW",  op:.26, w:1,   c:"255,180,40" },
-                { s:520, dur:11,   dir:"ringCW",   op:.16, w:1,   c:"245,140,10" },
-                { s:660, dur:15,   dir:"ringCCW",  op:.09, w:1,   c:"255,165,25" },
-              ].map(({ s,dur,dir,op,w,c },i) => (
-                <div key={i} className="ring" style={{
-                  width:s, height:s, marginTop:-s/2, marginLeft:-s/2,
-                  border:`${w}px solid rgba(${c},${op})`,
-                  animation:`${dir} ${dur}s linear ${i*.32}s infinite`,
-                  boxShadow:`0 0 ${w*6}px rgba(${c},${op*.38})`,
-                }} />
-              ))}
-
-              {/* Portal image */}
-              <div className="portal-img-wrap" style={{
-                width:"clamp(240px,30vw,420px)",
+              {/* ── PORTAL IMAGE with 12px radius + strong orange back-shadow ── */}
+              <div className="portal-box" style={{
+                width:"clamp(240px,30vw,400px)",
                 aspectRatio:"3/4",
-                boxShadow:"0 0 0 1px rgba(255,200,80,.07),0 0 90px rgba(245,130,10,.42),0 0 230px rgba(245,100,5,.2),0 44px 100px rgba(0,0,0,.88)",
               }}>
+                {/* Extra behind-glow layer — sits outside via negative margin trick using z-index */}
+                <div style={{
+                  position:"absolute", inset:"-18px",
+                  borderRadius:24,
+                  background:"transparent",
+                  boxShadow:`
+                    0 0 50px 12px rgba(255,140,10,.65),
+                    0 0 120px 30px rgba(245,100,5,.42),
+                    0 0 240px 60px rgba(220,75,5,.22),
+                    0 0 400px 100px rgba(180,50,0,.12)
+                  `,
+                  pointerEvents:"none", zIndex:-1,
+                }} />
+
                 <img
                   src={GATE_IMG}
                   alt="The Eternal Gate"
@@ -588,24 +704,28 @@ export default function LandingPage() {
                     display:"block",
                     opacity: imgLoaded ? 1 : 0,
                     transition:"opacity .9s ease",
+                    borderRadius:12,
                   }}
                 />
-                {/* Radial inner vignette */}
-                <div style={{ position:"absolute", inset:0, pointerEvents:"none",
+                {/* Inner radial vignette */}
+                <div style={{ position:"absolute", inset:0, pointerEvents:"none", borderRadius:12,
                   background:"radial-gradient(ellipse 58% 52% at 50% 38%,transparent 0%,transparent 32%,rgba(3,1,0,.52) 78%,rgba(2,1,0,.84) 100%)" }} />
-                {/* Bottom blend into fire */}
+                {/* Bottom fire blend */}
                 <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"44%", pointerEvents:"none",
-                  background:"linear-gradient(0deg,rgba(3,1,0,.97) 0%,rgba(6,2,0,.58) 40%,transparent 100%)" }} />
-                {/* Top */}
+                  background:"linear-gradient(0deg,rgba(3,1,0,.97) 0%,rgba(6,2,0,.58) 40%,transparent 100%)",
+                  borderRadius:"0 0 12px 12px" }} />
+                {/* Top overlay */}
                 <div style={{ position:"absolute", top:0, left:0, right:0, height:"18%", pointerEvents:"none",
-                  background:"linear-gradient(180deg,rgba(3,1,0,.68) 0%,transparent 100%)" }} />
-                {/* Amber screen overlay */}
-                <div style={{ position:"absolute", inset:0, pointerEvents:"none",
+                  background:"linear-gradient(180deg,rgba(3,1,0,.68) 0%,transparent 100%)",
+                  borderRadius:"12px 12px 0 0" }} />
+                {/* Amber screen */}
+                <div style={{ position:"absolute", inset:0, pointerEvents:"none", borderRadius:12,
                   background:"radial-gradient(ellipse 52% 38% at 50% 52%,rgba(255,130,10,.07) 0%,transparent 68%)",
                   mixBlendMode:"screen" }} />
                 {/* Loading skeleton */}
                 {!imgLoaded && (
-                  <div style={{ position:"absolute", inset:0, background:"linear-gradient(135deg,#0d0800,#1a100a,#0d0800)",
+                  <div style={{ position:"absolute", inset:0, borderRadius:12,
+                    background:"linear-gradient(135deg,#0d0800,#1a100a,#0d0800)",
                     display:"flex", alignItems:"center", justifyContent:"center" }}>
                     <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".44rem", letterSpacing:".22em",
                       textTransform:"uppercase", color:"rgba(255,185,60,.28)", animation:"blink 1.4s ease-in-out infinite" }}>
@@ -615,10 +735,10 @@ export default function LandingPage() {
                 )}
               </div>
 
-              {/* Fire canvas — erupts from portal base */}
+              {/* Fire erupting from portal base */}
               <div style={{
-                position:"absolute", bottom:-22, left:"50%", transform:"translateX(-50%)",
-                width:"clamp(240px,30vw,420px)", height:110,
+                position:"absolute", bottom:-18, left:"50%", transform:"translateX(-50%)",
+                width:"clamp(240px,30vw,400px)", height:110,
                 pointerEvents:"none", zIndex:5,
               }}>
                 <canvas ref={fireRef} style={{
@@ -632,7 +752,7 @@ export default function LandingPage() {
           </div>
 
           {/* CTAs */}
-          <div className="a3" style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:".95rem", zIndex:2 }}>
+          <div className="a3" style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:".9rem", zIndex:2 }}>
             <button className="btn-cta" style={{ padding:"1.05rem 3.4rem" }} onClick={() => setVisible(true)}>
               <span className="btn-shine" />
               <span className="ms" style={{ fontSize:16 }}>account_balance_wallet</span>
@@ -642,9 +762,7 @@ export default function LandingPage() {
           </div>
 
           {/* Protocol cards */}
-          <div className="a4" style={{
-            display:"flex", gap:5, marginTop:"1.4rem", flexWrap:"wrap", justifyContent:"center", maxWidth:540, zIndex:2,
-          }}>
+          <div className="a4" style={{ display:"flex", gap:6, marginTop:"1.3rem", flexWrap:"wrap", justifyContent:"center", maxWidth:540, zIndex:2 }}>
             {[
               { p:"JUPITER",    d:"Best-route swaps",  icon:"swap_horiz",  apy:null    },
               { p:"KAMINO",     d:"Yield deposits",     icon:"trending_up", apy:"5.8%" },
@@ -665,7 +783,7 @@ export default function LandingPage() {
           </div>
 
           {/* Stats */}
-          <div className="a4" style={{ display:"flex", gap:5, marginTop:"1rem", flexWrap:"wrap", justifyContent:"center", zIndex:2 }}>
+          <div className="a4" style={{ display:"flex", gap:6, marginTop:".9rem", flexWrap:"wrap", justifyContent:"center", zIndex:2 }}>
             {[{ l:"PROTOCOLS",v:"4" },{ l:"NETWORK",v:"SOLANA" },{ l:"SPEED",v:"< 1s" },{ l:"TVL",v:"$4.2M" }].map(({ l,v }) => (
               <div key={l} className="stat-pill">
                 <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".41rem", letterSpacing:".2em", textTransform:"uppercase", color:"rgba(255,210,130,.24)" }}>{l}</span>
@@ -675,7 +793,7 @@ export default function LandingPage() {
           </div>
 
           <p className="a5" style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".41rem", letterSpacing:".14em",
-            textTransform:"uppercase", color:"rgba(255,215,150,.14)", marginTop:"1.1rem", zIndex:2 }}>
+            textTransform:"uppercase", color:"rgba(255,215,150,.14)", marginTop:"1rem", zIndex:2 }}>
             DOMINUS NEVER EXECUTES WITHOUT YOUR EXPLICIT CONFIRMATION
           </p>
         </div>

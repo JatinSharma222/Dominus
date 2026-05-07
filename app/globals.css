@@ -307,3 +307,6 @@ body {
 [class*="wallet-adapter-dropdown"] {
   display: none !important;
 }
+
+/* ── Card spinner (used by TxConfirmCard, KaminoDepositCard, JitoStakeCard) ── */
+@keyframes spin { to { transform: rotate(360deg); } }

@@ -1,612 +1,635 @@
 "use client"
 
-import { useChat } from "ai/react"
+// app/chat/page.tsx — Oracle Command
+// Full chat interface: sidebar + chat + dynamic RightPanel
+
+import { useEffect, useState, useRef, useCallback } from "react"
 import { useWallet } from "@solana/wallet-adapter-react"
 import { useWalletModal } from "@solana/wallet-adapter-react-ui"
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import { useChat } from "ai/react"
+import type { Message } from "@/lib/types"
 import ChatWindow from "@/components/ChatWindow"
-import LLMSettings, { LLMSettingsConfig, loadLLMConfig } from "@/components/LLMSettings"
-import { shortenAddress } from "@/lib/solana"
+import LLMSettings, { loadLLMConfig, LLMSettingsConfig } from "@/components/LLMSettings"
+import RightPanel from "@/components/RightPanel"
 
-/* ─── Constants ─────────────────────────────────────────────────────────────── */
-
-const AETHER_AVATAR =
+const AETHER =
   "https://lh3.googleusercontent.com/aida-public/AB6AXuA8O-jxGq9p6pB2fhiscu4C-DTKs4C09K8meX9zguYmeMrhNe6q4QM7dv5QfDXGYL6uAgpBKmN5Q2tGcJlPM1OkJlkQuWjeWiqkoq2pGJLrSy6daejDBvONTDqOdDuCtB8yp73cQFNewH5t4Rz-5l6N9L8864wZTLKGb8MC5nNSnfwqh4xDTrnheF1zQE5gaeZ4B-jYEVJh0lgNIbtHmXSvZFtMgQ1z3pmXqf7-8swJqWCH5CePQ1A2sfZV_EMt13kNd1Uq2KdYqqZk"
 
-const NEURAL_METRICS = [
-  { label: "Sync Ratio",  value: "94.2%",  pct: 94 },
-  { label: "Latency",     value: "0.02ms", pct: 99 },
-  { label: "Accuracy",    value: "98.7%",  pct: 99 },
-  { label: "Throughput",  value: "4,891",  pct: 74 },
+const NAV_ITEMS = [
+  { icon: "psychology",       label: "Neural Link",  path: "/chat"      },
+  { icon: "sensors",          label: "Pulse",        path: "/pulse"     },
+  { icon: "query_stats",      label: "Tactical",     path: "/tactical"  },
+  { icon: "inventory_2",      label: "Logistics",    path: "/logistics" },
+  { icon: "blur_on",          label: "Void Shell",   path: "/void"      },
 ]
 
-const PROTOCOL_LOG = [
-  { time: "14:23", desc: "Jupiter route optimised via 3-hop path" },
-  { time: "14:19", desc: "Kamino APY updated — USDC at 5.8%" },
-  { time: "14:15", desc: "Jito MEV bundle captured +0.003 SOL" },
-  { time: "14:08", desc: "Streamflow disbursement #4421 complete" },
-  { time: "14:01", desc: "Portfolio snapshot — $4,218 total" },
+const SUGGESTIONS = [
+  "What's my portfolio worth?",
+  "Swap 0.5 SOL to USDC",
+  "Stake my idle SOL with Jito",
+  "Stream $20 USDC weekly",
 ]
-
-const CHIPS = ["Swap SOL → USDC", "Check Portfolio", "Stake SOL", "Best Yield Now"]
-
-/* ─── CSS ───────────────────────────────────────────────────────────────────── */
-
-const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@300;400;500;700&display=swap');
-  @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
-
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  .msym {
-    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-    line-height: 1; display: inline-block;
-    font-family: 'Material Symbols Outlined';
-  }
-
-  .hud-grid {
-    background-size: 32px 32px;
-    background-image:
-      linear-gradient(to right,  rgba(255,180,60,.05) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255,180,60,.05) 1px, transparent 1px);
-  }
-
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 3px; }
-  ::-webkit-scrollbar-track { background: #0A0A0A; }
-  ::-webkit-scrollbar-thumb { background: #3a2e20; border-radius: 2px; }
-  ::-webkit-scrollbar-thumb:hover { background: #FFC060; }
-  ::selection { background: rgba(255,185,60,.2); }
-
-  @keyframes blink { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.28;transform:scale(.58)} }
-  @keyframes scan  { 0%{top:-4px} 100%{top:calc(100vh + 4px)} }
-  @keyframes rise  { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
-
-  .rise { animation: rise .7s ease-out both; }
-
-  /* Nav wordmark */
-  .wm {
-    font-family:'Noto Serif',serif; font-weight:700; font-size:1.3rem;
-    letter-spacing:-.02em; color:#F59E0B; text-decoration:none;
-    text-shadow:0 0 10px rgba(245,158,11,.65),0 0 22px rgba(245,130,10,.28);
-    user-select:none;
-  }
-
-  /* Nav link */
-  .nav-lnk {
-    font-family:'Space Grotesk',sans-serif; font-size:.66rem; font-weight:700;
-    letter-spacing:.18em; text-transform:uppercase; text-decoration:none;
-    color:rgba(255,210,130,.5); background:none; border:none;
-    padding-bottom:3px; border-bottom:1.5px solid transparent;
-    transition:color .2s, border-color .2s; cursor:pointer;
-  }
-  .nav-lnk.active { color:#F59E0B; border-bottom-color:#F59E0B; }
-  .nav-lnk:hover:not(.active) { color:rgba(255,185,70,.85); }
-
-  /* Sidebar nav item */
-  .snav {
-    display:flex; align-items:center; gap:13px;
-    padding:11px 22px;
-    font-family:'Space Grotesk',sans-serif; font-size:.64rem; font-weight:700;
-    letter-spacing:.17em; text-transform:uppercase; text-decoration:none;
-    color:rgba(255,200,120,.28); background:none; border:none;
-    border-left:3px solid transparent;
-    transition:all .18s; cursor:pointer; width:100%; text-align:left;
-  }
-  .snav.active {
-    color:#F59E0B; background:rgba(245,158,11,.08); border-left-color:#F59E0B;
-  }
-  .snav:hover:not(.active) { color:rgba(255,200,100,.65); background:rgba(255,255,255,.028); }
-
-  /* Footer action */
-  .ftr-btn {
-    display:flex; align-items:center; gap:13px;
-    padding:10px 22px; width:100%; background:none; border:none; cursor:pointer;
-    font-family:'Space Grotesk',sans-serif; font-size:.62rem; font-weight:700;
-    letter-spacing:.17em; text-transform:uppercase;
-    color:rgba(255,200,120,.22); text-align:left; transition:color .18s;
-  }
-  .ftr-btn:hover { color:rgba(255,200,100,.6); }
-  .ftr-btn.danger:hover { color:#FFB4AB; }
-
-  /* Suggestion chip */
-  .chip {
-    font-family:'Space Grotesk',sans-serif; font-size:.58rem; font-weight:600;
-    letter-spacing:.15em; text-transform:uppercase;
-    color:rgba(255,200,120,.38); background:#181614;
-    border:1px solid rgba(255,180,60,.15); border-radius:2px;
-    padding:7px 14px; cursor:pointer; transition:all .18s;
-  }
-  .chip:hover { color:#FFC060; background:#211d18; border-color:rgba(255,185,60,.35); }
-
-  /* Send button */
-  .send-btn {
-    width:38px; height:38px; flex-shrink:0; border-radius:2px; border:none; cursor:pointer;
-    display:flex; align-items:center; justify-content:center;
-    background:linear-gradient(135deg,#FFD080,#F59E0B);
-    color:#2A1400;
-    box-shadow:0 0 16px rgba(245,158,11,.35);
-    transition:transform .14s, opacity .14s;
-  }
-  .send-btn:hover:not(:disabled) { transform:scale(1.08); }
-  .send-btn:active:not(:disabled) { transform:scale(.96); }
-  .send-btn:disabled { opacity:.25; cursor:not-allowed; }
-
-  /* Wallet button */
-  .wallet-btn {
-    display:flex; align-items:center; gap:6px;
-    padding:7px 16px; border-radius:2px; border:none; cursor:pointer;
-    font-family:'Space Grotesk',sans-serif; font-size:.6rem; font-weight:700;
-    letter-spacing:.17em; text-transform:uppercase; transition:all .18s;
-    border:1px solid rgba(255,185,60,.22);
-    background:rgba(255,185,60,.08); color:#FFC060;
-  }
-  .wallet-btn:hover { background:rgba(255,185,60,.16); }
-
-  /* Primary CTA */
-  .cta-sm {
-    font-family:'Space Grotesk',sans-serif; font-size:.6rem; font-weight:700;
-    letter-spacing:.2em; text-transform:uppercase;
-    color:#2A1400; background:linear-gradient(135deg,#FFD080,#F59E0B);
-    border:none; border-radius:2px; cursor:pointer;
-    padding:9px 20px;
-    box-shadow:0 0 18px rgba(245,158,11,.35);
-    transition:transform .14s, box-shadow .2s; white-space:nowrap;
-  }
-  .cta-sm:hover { transform:scale(1.04); box-shadow:0 0 28px rgba(245,158,11,.55); }
-  .cta-sm:active { transform:scale(.97); }
-
-  /* Initiate scan button */
-  .scan-btn {
-    width:100%; padding:9px 0; border-radius:2px;
-    font-family:'Space Grotesk',sans-serif; font-size:.6rem; font-weight:700;
-    letter-spacing:.2em; text-transform:uppercase;
-    color:#FFC060; cursor:pointer; transition:all .18s;
-    background:rgba(255,185,60,.07);
-    border:1px solid rgba(255,185,60,.2);
-  }
-  .scan-btn:hover { background:rgba(255,185,60,.14); border-color:rgba(255,185,60,.35); }
-
-  /* Camera screen */
-  .cam {
-    aspect-ratio:16/10; border-radius:3px;
-    background:#080604; position:relative; overflow:hidden;
-  }
-  .scanlines {
-    position:absolute; inset:0; pointer-events:none;
-    background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.1) 2px,rgba(0,0,0,.1) 4px);
-  }
-
-  /* Input area */
-  .input-wrap {
-    display:flex; align-items:flex-end; gap:10px;
-    padding:12px 16px; border-radius:2px;
-    background:#0C0A08;
-    border:1px solid rgba(255,180,60,.14);
-    transition:border-color .2s, box-shadow .2s;
-  }
-  .input-wrap:focus-within {
-    border-color:rgba(255,185,60,.32);
-    box-shadow:0 0 0 3px rgba(255,185,60,.06);
-  }
-  textarea {
-    flex:1; background:transparent; border:none; outline:none; resize:none;
-    font-family:'Space Grotesk',sans-serif; font-size:.78rem;
-    color:#E5E2E1; line-height:1.55; max-height:120px; overflow-y:auto;
-  }
-  textarea::placeholder { color:rgba(255,200,120,.28); }
-
-  /* Stat label / value */
-  .stat-lbl { font-family:'Space Grotesk',sans-serif; font-size:.5rem; letter-spacing:.2em; text-transform:uppercase; color:rgba(255,200,120,.28); display:block; margin-bottom:4px; }
-  .stat-val { font-family:'Noto Serif',serif; font-size:1.1rem; color:#E5E2E1; line-height:1; }
-
-  /* Status bar text */
-  .sb-txt { font-family:'Space Grotesk',sans-serif; font-size:.52rem; font-weight:600; letter-spacing:.2em; text-transform:uppercase; color:rgba(255,200,120,.38); }
-
-  /* Hide wallet adapter auto button */
-  .wallet-adapter-dropdown,
-  .wallet-adapter-button-trigger,
-  [class*="wallet-adapter-dropdown"] { display:none !important; }
-`
-
-/* ─── Component ─────────────────────────────────────────────────────────────── */
 
 export default function ChatPage() {
-  const { publicKey, disconnect, connected } = useWallet()
-  const { setVisible }                       = useWalletModal()
-  const [input, setInput]                    = useState("")
-  const [isSettingsOpen, setIsSettingsOpen]  = useState(false)
-  const [llmConfig, setLLMConfig]            = useState<LLMSettingsConfig | null>(null)
-  const [avatarErr, setAvatarErr]            = useState(false)
-  const [clock, setClock]                    = useState("")
-  const inputRef                             = useRef<HTMLTextAreaElement>(null)
+  const { publicKey, connected, disconnect } = useWallet()
+  const { setVisible } = useWalletModal()
+  const router = useRouter()
 
-  useEffect(() => { setLLMConfig(loadLLMConfig()) }, [])
+  const [mounted,        setMounted]        = useState(false)
+  const [settingsOpen,   setSettingsOpen]   = useState(false)
+  const [llmConfig,      setLlmConfig]      = useState<LLMSettingsConfig | null>(null)
+  const [sidebarOpen,    setSidebarOpen]    = useState(false) // mobile
+  const [activityLog,    setActivityLog]    = useState<Array<{ time: string; message: string }>>([])
+  const inputRef  = useRef<HTMLTextAreaElement>(null)
+  const chatBottom = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const tick = () => setClock(
-      new Date().toLocaleTimeString("en-US", { hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false })
-    )
-    tick(); const id = setInterval(tick, 1000); return () => clearInterval(id)
-  }, [])
+  const walletAddress = publicKey?.toString() ?? ""
+  const network = process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet-beta" ? "MAINNET" : "DEVNET"
 
-  const chatBody = {
-    walletAddress: publicKey?.toString(),
-    ...(llmConfig && {
-      llmOverride: llmConfig.mode === "ollama"
-        ? { provider:"ollama" as const, baseUrl:llmConfig.ollamaBaseUrl, model:llmConfig.ollamaModel }
-        : { provider:llmConfig.provider, apiKey:llmConfig.apiKey, model:llmConfig.model || undefined },
-    }),
-  }
+  // Build llmOverride from stored config
+  const llmOverride = llmConfig
+    ? llmConfig.mode === "ollama"
+      ? { provider: "ollama" as const, baseUrl: llmConfig.ollamaBaseUrl, model: llmConfig.ollamaModel }
+      : { provider: llmConfig.provider, apiKey: llmConfig.apiKey, model: llmConfig.model }
+    : undefined
 
-  const { messages, append, isLoading, setMessages } = useChat({ api:"/api/chat", body:chatBody })
-
-  const typedMessages = messages.map((m) => {
-    let content = ""
-    if (typeof m.content === "string") content = m.content
-    else if (Array.isArray(m.content))
-      content = (m.content as { type:string; text?:string }[])
-        .filter((p) => p.type === "text" && p.text).map((p) => p.text).join("")
-    let toolInvocations: { toolName:string; state:"call"|"result"|"partial-call"; result?:unknown }[] | undefined
-      = m.toolInvocations as typeof toolInvocations
-    if (!toolInvocations?.length && m.annotations?.length) {
-      const ann = (m.annotations as unknown[]).filter(
-        (a): a is { toolName:string; result:unknown } => typeof a === "object" && a !== null && "toolName" in a
-      )
-      if (ann.length) toolInvocations = ann.map((a) => ({ toolName:a.toolName, state:"result" as const, result:a.result }))
-    }
-    return { id:m.id, role:m.role as "user"|"assistant", content, toolInvocations }
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages, append } = useChat({
+    api: "/api/chat",
+    body: { walletAddress, llmOverride },
+    onFinish: (msg) => {
+      const t = new Date()
+      const ts = `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`
+      setActivityLog(prev => [{ time: ts, message: "AI response complete" }, ...prev].slice(0, 30))
+    },
   })
 
+  useEffect(() => { setMounted(true); setLlmConfig(loadLLMConfig()) }, [])
+
+  // Auto-scroll
   useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.style.height = "auto"
-      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`
+    chatBottom.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages, isLoading])
+
+  // Log user messages to activity
+  const handleSend = useCallback((e?: React.FormEvent) => {
+    e?.preventDefault()
+    if (!input.trim()) return
+
+    if (!connected) {
+      const ts = new Date()
+      const t  = `${pad(ts.getHours())}:${pad(ts.getMinutes())}:${pad(ts.getSeconds())}`
+      setMessages([
+        ...messages,
+        { id:`local-u-${Date.now()}`, role:"user",      content: input } as Message,
+        { id:`local-a-${Date.now()}`, role:"assistant", content: "Please connect your wallet first to use Dominus. Click **CONNECT WALLET** in the top nav." } as Message,
+      ])
+      return
     }
-  }, [input])
 
-  const showWalletWarning = useCallback((text: string) => {
-    setMessages([...messages,
-      { id:`local-${Date.now()}-u`, role:"user",      content:text },
-      { id:`local-${Date.now()}-a`, role:"assistant", content:"Please connect your wallet first — click CONNECT WALLET in the top bar." },
-    ])
-  }, [messages, setMessages])
+    const ts = new Date()
+    const t  = `${pad(ts.getHours())}:${pad(ts.getMinutes())}:${pad(ts.getSeconds())}`
+    setActivityLog(prev => [{ time:t, message:`User: ${input.slice(0,42)}…` }, ...prev].slice(0,30))
+    handleSubmit(e as React.FormEvent<HTMLFormElement>)
+  }, [input, connected, messages, handleSubmit, setMessages])
 
-  async function handleSend() {
-    const t = input.trim(); if (!t || isLoading) return
-    setInput("")
-    if (!connected || !publicKey) { showWalletWarning(t); return }
-    await append({ role:"user", content:t })
-  }
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+  const handleSuggestion = useCallback((text: string) => {
+    if (!connected) { setVisible(true); return }
+    const ts = new Date()
+    const t  = `${pad(ts.getHours())}:${pad(ts.getMinutes())}:${pad(ts.getSeconds())}`
+    setActivityLog(prev => [{ time:t, message:`User: ${text}` }, ...prev].slice(0,30))
+    append({ role:"user", content: text })
+  }, [connected, append, setVisible])
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
-  async function handleChip(prompt: string) {
-    if (isLoading) return
-    if (!connected || !publicKey) { showWalletWarning(prompt); return }
-    await append({ role:"user", content:prompt })
-  }
 
-  const llmLabel = llmConfig?.mode === "api"
-    ? (llmConfig.provider === "anthropic" ? `ANTHROPIC — ${llmConfig.model || "DEFAULT"}` : `OPENAI — ${llmConfig.model || "DEFAULT"}`)
-    : `OLLAMA — ${llmConfig?.ollamaModel ?? "llama3.1:8b"}`
-  const network = process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet-beta" ? "MAINNET" : "DEVNET"
+  if (!mounted) return <div style={{ background:"#060300", width:"100vw", height:"100vh" }} />
 
   return (
     <>
-      <style>{CSS}</style>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@300;400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
 
-      <div style={{ display:"flex", flexDirection:"column", height:"100vh", background:"#0C0A08", position:"relative", overflow:"hidden" }}>
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+        html,body{height:100%;overflow:hidden;background:#060300}
 
-        {/* Full-page HUD grid */}
-        <div className="hud-grid" style={{ position:"fixed", inset:0, pointerEvents:"none", zIndex:0, opacity:.8 }} />
+        .ms{
+          font-family:'Material Symbols Outlined';
+          font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;
+          line-height:1;user-select:none;display:inline-block;
+        }
 
-        {/* Subtle ambient orb — top center */}
-        <div style={{
-          position:"fixed", top:"-10%", left:"50%", transform:"translateX(-50%)",
-          width:700, height:400, borderRadius:"50%",
-          background:"radial-gradient(ellipse, rgba(245,158,11,.06) 0%, transparent 65%)",
-          filter:"blur(50px)", pointerEvents:"none", zIndex:0,
-        }} />
+        /* Animations */
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:.14}}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        @keyframes shimmerSweep{0%{background-position:-250% 0}100%{background-position:250% 0}}
+        @keyframes msgIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes beamPulse{0%,100%{opacity:.2}50%{opacity:.65}}
+        @keyframes msg-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes scanLine{0%{top:-2px}100%{top:calc(100% + 2px)}}
 
-        {/* Scanline */}
-        <div style={{ position:"fixed", inset:0, overflow:"hidden", pointerEvents:"none", zIndex:1 }}>
-          <div style={{
-            position:"absolute", left:0, right:0, height:2,
-            background:"linear-gradient(to bottom,transparent,rgba(255,180,30,.03),transparent)",
-            animation:"scan 18s linear infinite",
-          }} />
+        /* Nav glass */
+        .nav-glass{
+          background:linear-gradient(180deg,rgba(5,2,0,.88) 0%,rgba(3,1,0,.72) 100%);
+          backdrop-filter:blur(32px) saturate(1.8);
+          -webkit-backdrop-filter:blur(32px) saturate(1.8);
+          border-bottom:1px solid rgba(255,185,60,.1);
+          box-shadow:0 1px 0 rgba(255,255,255,.035),0 18px 55px rgba(0,0,0,.62);
+        }
+
+        /* Sidebar */
+        .sidebar{
+          background:linear-gradient(180deg,rgba(8,5,1,.96) 0%,rgba(5,3,0,.98) 100%);
+          border-right:1px solid rgba(255,185,60,.08);
+          box-shadow:4px 0 30px rgba(0,0,0,.55),inset -1px 0 0 rgba(255,185,60,.04);
+        }
+
+        /* Chat area */
+        .chat-bg{
+          background:
+            radial-gradient(ellipse 65% 45% at 50% 30%,rgba(255,120,10,.042) 0%,transparent 68%),
+            linear-gradient(180deg,#060300 0%,#060200 100%);
+        }
+
+        /* Message glass — AI */
+        .msg-ai{
+          background:linear-gradient(135deg,rgba(28,22,14,.94) 0%,rgba(20,15,9,.97) 100%);
+          border:1px solid rgba(255,185,60,.15);
+          border-top:1px solid rgba(255,185,60,.25);
+          border-left:2.5px solid rgba(255,185,60,.35);
+          border-radius:0 12px 12px 12px;
+          box-shadow:
+            0 4px 8px rgba(0,0,0,.62),
+            0 14px 36px rgba(0,0,0,.75),
+            0 28px 60px rgba(0,0,0,.5),
+            0 0 0 1px rgba(0,0,0,.35),
+            0 0 24px rgba(245,158,11,.055),
+            inset 0 1px 0 rgba(255,200,80,.07);
+          position:relative;overflow:hidden;
+        }
+        .msg-ai::before{
+          content:'';position:absolute;inset:0;pointer-events:none;
+          background:linear-gradient(108deg,transparent 22%,rgba(255,255,255,.055) 50%,transparent 78%);
+          background-size:250% 100%;animation:shimmerSweep 12s ease-in-out infinite;
+        }
+
+        /* Message glass — User */
+        .msg-user{
+          background:linear-gradient(135deg,rgba(38,30,20,.92) 0%,rgba(28,22,14,.95) 100%);
+          border:1px solid rgba(160,142,122,.18);
+          border-top:1px solid rgba(255,255,255,.08);
+          border-right:2.5px solid rgba(255,185,60,.28);
+          border-radius:12px 0 12px 12px;
+          box-shadow:
+            0 4px 8px rgba(0,0,0,.58),
+            0 14px 36px rgba(0,0,0,.72),
+            0 0 0 1px rgba(0,0,0,.3);
+          position:relative;overflow:hidden;
+        }
+
+        /* Input field */
+        .chat-input{
+          background:rgba(14,10,6,.85);
+          border:1px solid rgba(255,185,60,.12);
+          border-radius:12px;
+          color:#E5E2E1;
+          font-family:'Space Grotesk',sans-serif;
+          font-size:.8rem;
+          line-height:1.55;
+          outline:none;
+          resize:none;
+          transition:border-color .2s,box-shadow .2s;
+          box-shadow:0 4px 18px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.03);
+        }
+        .chat-input:focus{
+          border-color:rgba(255,185,60,.35);
+          box-shadow:0 0 0 3px rgba(255,193,116,.08),0 4px 18px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.03);
+        }
+        .chat-input::placeholder{color:rgba(229,226,225,.2)}
+
+        /* Send button */
+        .send-btn{
+          background:linear-gradient(135deg,#FFD060,#F59E0B 55%,#D97706);
+          border:none;border-radius:10px;cursor:pointer;
+          width:42px;height:42px;
+          display:flex;align-items:center;justify-content:center;flex-shrink:0;
+          box-shadow:0 0 20px rgba(245,158,11,.55),0 4px 14px rgba(0,0,0,.6);
+          transition:transform .18s cubic-bezier(.22,1,.36,1),box-shadow .18s;
+        }
+        .send-btn:hover{transform:scale(1.08);box-shadow:0 0 32px rgba(255,185,10,.85),0 6px 18px rgba(0,0,0,.65)}
+        .send-btn:active{transform:scale(.94)}
+        .send-btn:disabled{opacity:.38;cursor:not-allowed;transform:none}
+
+        /* Sidebar nav item */
+        .nav-item{
+          display:flex;align-items:center;gap:14px;
+          padding:10px 20px;cursor:pointer;
+          transition:background .18s,color .18s;border-left:3px solid transparent;
+        }
+        .nav-item:hover{background:rgba(255,185,60,.06)}
+        .nav-item.active{
+          background:rgba(255,185,60,.09);
+          border-left-color:rgba(255,185,60,.8);
+        }
+        .nav-item.active .nav-icon{color:rgba(255,185,60,.92)}
+        .nav-item.active .nav-label{color:rgba(255,185,60,.95)}
+        .nav-icon{
+          font-family:'Material Symbols Outlined';
+          font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;
+          font-size:20px;line-height:1;color:rgba(255,215,150,.3);
+          transition:color .18s,transform .18s;
+        }
+        .nav-item:hover .nav-icon{color:rgba(255,215,150,.65);transform:scale(1.1)}
+        .nav-label{
+          font-family:'Space Grotesk',sans-serif;font-size:.6rem;font-weight:700;
+          letter-spacing:.18em;text-transform:uppercase;color:rgba(255,215,150,.3);
+          transition:color .18s;
+        }
+        .nav-item:hover .nav-label{color:rgba(255,215,150,.65)}
+
+        /* Initiate scan button */
+        .scan-btn{
+          display:flex;align-items:center;justify-content:center;gap:7px;
+          padding:9px 0;width:calc(100% - 32px);margin:0 16px;
+          background:rgba(255,185,60,.07);
+          border:1px solid rgba(255,185,60,.18);
+          border-radius:8px;cursor:pointer;
+          font-family:'Space Grotesk',sans-serif;font-size:.54rem;font-weight:700;
+          letter-spacing:.2em;text-transform:uppercase;color:rgba(255,185,60,.65);
+          transition:all .2s;
+          box-shadow:0 0 16px rgba(245,158,11,.06),inset 0 1px 0 rgba(255,200,80,.07);
+        }
+        .scan-btn:hover{background:rgba(255,185,60,.12);border-color:rgba(255,185,60,.3);color:rgba(255,185,60,.9);box-shadow:0 0 24px rgba(245,158,11,.12)}
+
+        /* Suggestion chip */
+        .chip{
+          display:inline-flex;align-items:center;gap:6px;
+          padding:6px 14px;
+          background:rgba(255,185,60,.05);
+          border:1px solid rgba(255,185,60,.12);
+          border-radius:8px;cursor:pointer;
+          font-family:'Space Grotesk',sans-serif;font-size:.54rem;font-weight:500;
+          letter-spacing:.12em;text-transform:uppercase;color:rgba(255,215,150,.38);
+          transition:all .18s;white-space:nowrap;
+        }
+        .chip:hover{background:rgba(255,185,60,.1);border-color:rgba(255,185,60,.28);color:rgba(255,185,60,.85)}
+
+        /* Status bar */
+        .status-bar{
+          background:linear-gradient(0deg,rgba(3,1,0,.97) 0%,rgba(5,2,0,.88) 100%);
+          backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+          border-top:1px solid rgba(255,185,60,.08);
+          box-shadow:0 -12px 40px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.025);
+        }
+
+        /* Connect wallet button */
+        .connect-btn{
+          display:inline-flex;align-items:center;gap:6px;
+          padding:.36rem 1.1rem;
+          background:linear-gradient(135deg,#FFD060,#F59E0B 55%,#D97706);
+          border:none;border-radius:8px;cursor:pointer;
+          font-family:'Space Grotesk',sans-serif;font-size:.56rem;font-weight:700;
+          letter-spacing:.2em;text-transform:uppercase;color:#120700;
+          box-shadow:0 0 22px rgba(245,158,11,.5),0 4px 14px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.38);
+          transition:transform .18s,box-shadow .18s;
+          text-shadow:0 1px 0 rgba(255,255,255,.28);
+        }
+        .connect-btn:hover{transform:scale(1.04);box-shadow:0 0 36px rgba(255,185,10,.8),0 6px 18px rgba(0,0,0,.6)}
+
+        /* Wallet chip (connected) */
+        .wallet-chip{
+          display:inline-flex;align-items:center;gap:7px;
+          padding:.32rem .9rem;
+          background:rgba(255,185,60,.08);
+          border:1px solid rgba(255,185,60,.2);border-radius:8px;
+          font-family:'Space Grotesk',sans-serif;font-size:.5rem;font-weight:700;
+          letter-spacing:.14em;text-transform:uppercase;color:rgba(255,185,60,.72);
+          box-shadow:0 2px 10px rgba(0,0,0,.42);cursor:default;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar{width:3px;height:3px}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:rgba(255,185,60,.18);border-radius:2px}
+        ::-webkit-scrollbar-thumb:hover{background:rgba(255,185,60,.4)}
+        ::selection{background:rgba(255,193,116,.22)}
+
+        /* Hide wallet adapter default UI */
+        .wallet-adapter-dropdown,.wallet-adapter-button-trigger,[class*="wallet-adapter-dropdown"]{display:none!important}
+      `}</style>
+
+      {/* ══ ROOT ══════════════════════════════════════════════════════════════ */}
+      <div style={{ display:"flex", flexDirection:"column", height:"100vh", background:"#060300", overflow:"hidden" }}>
+
+        {/* Scan line */}
+        <div style={{ position:"fixed", inset:0, overflow:"hidden", pointerEvents:"none", zIndex:100 }}>
+          <div style={{ position:"absolute", left:0, right:0, height:2, top:0,
+            background:"linear-gradient(180deg,transparent,rgba(255,185,40,.028),transparent)",
+            animation:"scanLine 32s linear infinite" }} />
         </div>
 
-        {/* ════ TOP NAV ════ */}
-        <nav style={{
-          height:66, flexShrink:0, position:"relative", zIndex:40,
+        {/* ══ TOP NAV ═══════════════════════════════════════════════════════ */}
+        <nav className="nav-glass" style={{
+          height: 60, flexShrink: 0,
           display:"flex", alignItems:"center", justifyContent:"space-between",
-          padding:"0 2rem",
-          background:"rgba(8,5,2,.6)",
-          backdropFilter:"blur(24px)", WebkitBackdropFilter:"blur(24px)",
-          borderBottom:"1px solid rgba(255,180,50,.1)",
-          boxShadow:"0 1px 30px rgba(0,0,0,.5)",
+          padding:"0 1.4rem", zIndex:50,
         }}>
-          <div style={{ display:"flex", alignItems:"center", gap:"2.2rem" }}>
-            <a href="/" className="wm">DOMINUS</a>
-            <a href="/chat" className="nav-lnk active">ORACLE COMMAND</a>
-          </div>
-          <div style={{ display:"flex", alignItems:"center", gap:"1rem" }}>
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,200,120,.35)", display:"flex", padding:4, transition:"color .2s" }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,185,60,.9)" }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,200,120,.35)" }}
-            >
-              <span className="msym" style={{ fontSize:20 }}>settings</span>
+          {/* Left */}
+          <div style={{ display:"flex", alignItems:"center", gap:"1.6rem" }}>
+            {/* Mobile sidebar toggle */}
+            <button onClick={() => setSidebarOpen(o=>!o)}
+              style={{ display:"none", background:"none", border:"none", cursor:"pointer",
+                color:"rgba(255,185,60,.5)", padding:4 }}
+              className="mobile-menu-btn">
+              <span className="ms" style={{ fontSize:22 }}>menu</span>
             </button>
-            {connected && publicKey ? (
-              <button className="wallet-btn" onClick={() => disconnect()}>
-                <span className="msym" style={{ fontSize:16 }}>account_balance_wallet</span>
-                {shortenAddress(publicKey.toString())}
+
+            <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+              <div style={{ width:26, height:26, borderRadius:8, overflow:"hidden", flexShrink:0,
+                border:"1px solid rgba(255,185,60,.32)", boxShadow:"0 0 10px rgba(245,158,11,.42)" }}>
+                <img src={AETHER} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display="none" }} />
+              </div>
+              <button onClick={() => router.push("/")} style={{ background:"none", border:"none", cursor:"pointer" }}>
+                <span style={{ fontFamily:"'Noto Serif',serif", fontWeight:700, fontSize:"1.15rem",
+                  letterSpacing:"-.022em", color:"#F59E0B", userSelect:"none",
+                  textShadow:"0 0 12px rgba(245,158,11,.9),0 0 32px rgba(245,130,10,.38)" }}>DOMINUS</span>
               </button>
+            </div>
+
+            <div style={{ display:"flex", alignItems:"center", gap:5, padding:".28rem .7rem",
+              background:"rgba(255,185,60,.06)", border:"1px solid rgba(255,185,60,.1)", borderRadius:20 }}>
+              <span style={{ width:5, height:5, borderRadius:"50%", background:"#FFAD10",
+                boxShadow:"0 0 6px rgba(255,185,60,.8)", display:"inline-block",
+                animation:"blink 2.4s ease-in-out infinite" }} />
+              <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".44rem", fontWeight:600,
+                letterSpacing:".2em", textTransform:"uppercase", color:"rgba(255,185,60,.6)" }}>
+                ORACLE COMMAND
+              </span>
+            </div>
+          </div>
+
+          {/* Right */}
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <button onClick={() => setSettingsOpen(true)}
+              style={{ background:"none", border:"none", cursor:"pointer",
+                color:"rgba(255,200,120,.3)", padding:4, transition:"color .2s", display:"flex" }}
+              onMouseEnter={e=>(e.currentTarget.style.color="rgba(255,185,60,.85)")}
+              onMouseLeave={e=>(e.currentTarget.style.color="rgba(255,200,120,.3)")}>
+              <span className="ms" style={{ fontSize:19 }}>settings</span>
+            </button>
+
+            {connected && walletAddress ? (
+              <div className="wallet-chip">
+                <span style={{ width:6, height:6, borderRadius:"50%", background:"rgba(100,220,120,.8)",
+                  boxShadow:"0 0 6px rgba(80,255,130,.7)", display:"inline-block",
+                  animation:"blink 2.8s ease-in-out infinite" }} />
+                {walletAddress.slice(0,5)}…{walletAddress.slice(-4)}
+              </div>
             ) : (
-              <button className="cta-sm" onClick={() => setVisible(true)}>CONNECT WALLET</button>
+              <button className="connect-btn" onClick={() => setVisible(true)}>
+                <span className="ms" style={{ fontSize:14 }}>account_balance_wallet</span>
+                CONNECT WALLET
+              </button>
             )}
           </div>
         </nav>
 
-        {/* ════ BODY ════ */}
-        <div style={{ display:"flex", flex:1, overflow:"hidden", position:"relative", zIndex:2 }}>
+        {/* ══ BODY ═══════════════════════════════════════════════════════════ */}
+        <div style={{ display:"flex", flex:1, minHeight:0, overflow:"hidden" }}>
 
-          {/* ── SIDEBAR ── */}
-          <aside style={{
-            width:220, flexShrink:0,
-            display:"flex", flexDirection:"column",
-            background:"rgba(8,5,2,.65)",
-            backdropFilter:"blur(28px)", WebkitBackdropFilter:"blur(28px)",
-            borderRight:"1px solid rgba(255,180,50,.08)",
+          {/* ══ SIDEBAR ══════════════════════════════════════════════════════ */}
+          <aside className="sidebar" style={{
+            width: 220, flexShrink:0, display:"flex", flexDirection:"column",
+            height:"100%", overflowY:"auto", paddingTop:8, paddingBottom:16,
+            zIndex:40,
           }}>
-            {/* Agent block */}
-            <div style={{ padding:"24px 20px 16px" }}>
+            {/* Agent identity */}
+            <div style={{ padding:"16px 20px 14px", borderBottom:"1px solid rgba(255,185,60,.06)", marginBottom:8 }}>
               <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
-                <div style={{
-                  width:34, height:34, borderRadius:3, flexShrink:0, overflow:"hidden",
-                  border:"1px solid rgba(255,185,60,.25)",
-                  background:"rgba(255,185,60,.08)",
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                }}>
-                  {!avatarErr
-                    ? <img src={AETHER_AVATAR} alt="Aether" style={{ width:"100%", height:"100%", objectFit:"cover" }} onError={() => setAvatarErr(true)} />
-                    : <span className="msym" style={{ fontSize:18, color:"#FFC060" }}>smart_toy</span>
-                  }
+                <div style={{ width:32, height:32, borderRadius:8, overflow:"hidden", flexShrink:0,
+                  border:"1px solid rgba(255,185,60,.28)", boxShadow:"0 0 10px rgba(245,158,11,.35)" }}>
+                  <img src={AETHER} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display="none" }} />
                 </div>
                 <div>
-                  <p style={{ fontFamily:"'Noto Serif',serif", fontSize:".72rem", fontWeight:700, color:"#FFC060", letterSpacing:".14em", textTransform:"uppercase" }}>AETHER-01</p>
-                  <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".5rem", color:"rgba(255,200,120,.3)", letterSpacing:".16em", textTransform:"uppercase", marginTop:2 }}>AI AGENT ACTIVE</p>
+                  <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".68rem", fontWeight:700,
+                    letterSpacing:".12em", textTransform:"uppercase", color:"rgba(255,185,60,.92)", margin:0 }}>
+                    AETHER-01
+                  </p>
+                  <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".42rem", fontWeight:600,
+                    letterSpacing:".18em", textTransform:"uppercase", color:"rgba(255,215,150,.28)", margin:0 }}>
+                    AI AGENT ACTIVE
+                  </p>
                 </div>
               </div>
 
-              {/* Status dot */}
-              <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:14 }}>
-                <span style={{ width:6, height:6, borderRadius:"50%", background:"#FFC060", boxShadow:"0 0 7px rgba(255,185,60,.85)", animation:"blink 2.5s ease-in-out infinite", flexShrink:0 }} />
-                <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".5rem", color:"rgba(255,185,60,.55)", letterSpacing:".16em", textTransform:"uppercase" }}>ONLINE · SOLANA</span>
+              <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:12 }}>
+                <span style={{ width:5, height:5, borderRadius:"50%", background:connected?"#55FF88":"#FF6B6B",
+                  boxShadow:`0 0 5px ${connected?"rgba(80,255,130,.8)":"rgba(255,100,80,.6)"}`,
+                  display:"inline-block", animation:"blink 2.2s ease-in-out infinite" }} />
+                <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".44rem", fontWeight:600,
+                  letterSpacing:".16em", textTransform:"uppercase",
+                  color: connected ? "rgba(100,220,120,.6)" : "rgba(255,100,80,.55)" }}>
+                  {connected ? "ONLINE · SOLANA" : "NO WALLET"}
+                </span>
               </div>
 
-              <button className="scan-btn" onClick={() => handleChip("Check Portfolio")}>INITIATE SCAN</button>
+              <button className="scan-btn">
+                <span className="ms" style={{ fontSize:15, color:"inherit" }}>radar</span>
+                INITIATE SCAN
+              </button>
             </div>
 
-            {/* Divider */}
-            <div style={{ height:1, background:"rgba(255,180,50,.07)", margin:"0 0 4px" }} />
-
-            {/* Nav — only real routes */}
+            {/* Nav items */}
             <nav style={{ flex:1 }}>
-              <a href="/chat" className="snav active">
-                <span className="msym" style={{ fontSize:18 }}>psychology</span>
-                Neural Link
-              </a>
+              {NAV_ITEMS.map(({ icon, label, path }) => (
+                <div key={label} className={`nav-item${path === "/chat" ? " active" : ""}`}
+                  onClick={() => router.push(path)}>
+                  <span className="nav-icon">{icon}</span>
+                  <span className="nav-label">{label}</span>
+                </div>
+              ))}
             </nav>
 
-            {/* Divider */}
-            <div style={{ height:1, background:"rgba(255,180,50,.07)", margin:"4px 0" }} />
-
             {/* Footer */}
-            <div style={{ paddingBottom:10 }}>
-              <button className="ftr-btn" onClick={() => setIsSettingsOpen(true)}>
-                <span className="msym" style={{ fontSize:18 }}>terminal</span>
-                Diagnostics
-              </button>
+            <div style={{ borderTop:"1px solid rgba(255,185,60,.06)", paddingTop:8 }}>
+              <div className="nav-item" onClick={() => router.push("/diagnostics")}>
+                <span className="nav-icon">terminal</span>
+                <span className="nav-label">Diagnostics</span>
+              </div>
               {connected && (
-                <button className="ftr-btn danger" onClick={() => disconnect()}>
-                  <span className="msym" style={{ fontSize:18 }}>power_settings_new</span>
-                  Disconnect
-                </button>
+                <div className="nav-item" onClick={() => disconnect()}
+                  style={{ color:"rgba(255,120,100,.4)" }}>
+                  <span className="nav-icon" style={{ color:"rgba(255,120,100,.4)" }}>power_settings_new</span>
+                  <span className="nav-label" style={{ color:"rgba(255,120,100,.45)" }}>Disconnect</span>
+                </div>
               )}
             </div>
           </aside>
 
-          {/* ── MAIN CHAT ── */}
-          <main style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", minWidth:0 }}>
-
+          {/* ══ MAIN CHAT ════════════════════════════════════════════════════ */}
+          <main className="chat-bg" style={{
+            flex:1, display:"flex", flexDirection:"column",
+            height:"100%", overflow:"hidden", minWidth:0,
+            position:"relative",
+          }}>
             {/* Page header */}
-            <div style={{ padding:"20px 28px 12px", flexShrink:0 }}>
-              <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".56rem", fontWeight:600, letterSpacing:".38em", textTransform:"uppercase", color:"rgba(255,185,60,.7)", marginBottom:6 }}>
+            <div style={{ padding:"20px 28px 0", flexShrink:0 }}>
+              <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".5rem", fontWeight:600,
+                letterSpacing:".4em", textTransform:"uppercase", color:"rgba(255,185,60,.45)", marginBottom:6 }}>
                 PHASE 04 // DEPLOYMENT
               </p>
-              <h2 style={{ fontFamily:"'Noto Serif',serif", fontWeight:400, letterSpacing:"-.02em", lineHeight:.92, marginBottom:8 }}>
-                <span style={{ color:"#E5E2E1", fontSize:"clamp(1.8rem,3.8vw,3rem)" }}>Oracle </span>
-                <span style={{ color:"#F59E0B", fontSize:"clamp(1.8rem,3.8vw,3rem)", textShadow:"0 0 20px rgba(245,158,11,.4)" }}>Command</span>
-              </h2>
-              <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".7rem", color:"rgba(255,200,120,.35)", lineHeight:1.5 }}>
-                {connected
-                  ? `Agent active · ${shortenAddress(publicKey!.toString())} connected`
-                  : "Connect your wallet to execute on-chain actions"}
+              <div style={{ display:"flex", alignItems:"baseline", gap:12, marginBottom:4 }}>
+                <h1 style={{ fontFamily:"'Noto Serif',serif", fontWeight:400, fontSize:"clamp(2rem,4vw,3.2rem)",
+                  letterSpacing:"-.02em", color:"rgba(229,226,225,.9)", lineHeight:1 }}>
+                  Oracle{" "}
+                  <span style={{
+                    background:"linear-gradient(135deg,#FFD060,#F59E0B 55%,#D97706)",
+                    WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text",
+                    textShadow:"none",
+                  }}>Command</span>
+                </h1>
+              </div>
+              <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".65rem",
+                color:"rgba(229,226,225,.28)", letterSpacing:".04em", marginBottom:0 }}>
+                Agent active ·{" "}
+                {walletAddress
+                  ? <span style={{ color:"rgba(255,185,60,.45)" }}>{walletAddress.slice(0,8)}…{walletAddress.slice(-6)} connected</span>
+                  : <span style={{ color:"rgba(255,100,80,.4)" }}>No wallet connected</span>
+                }
               </p>
+              {/* Hairline */}
+              <div style={{ height:1, marginTop:14,
+                background:"linear-gradient(90deg,transparent,rgba(255,185,60,.15),transparent)" }} />
             </div>
 
-            {/* Hairline */}
-            <div style={{ height:1, background:"linear-gradient(to right,transparent,rgba(255,180,50,.2),transparent)", margin:"0 28px 0", flexShrink:0 }} />
+            {/* Chat window — scrollable */}
+            <div style={{ flex:1, overflowY:"auto", padding:"16px 28px", display:"flex", flexDirection:"column", gap:20 }}>
+              <ChatWindow messages={messages as unknown as Parameters<typeof ChatWindow>[0]["messages"]} isLoading={isLoading} />
+              <div ref={chatBottom} />
+            </div>
 
-            {/* Chat */}
-            <ChatWindow messages={typedMessages} isLoading={isLoading} />
-
-            {/* Chips */}
+            {/* Suggestion chips — only when no messages */}
             {messages.length === 0 && (
-              <div style={{ display:"flex", gap:7, padding:"0 28px 10px", flexWrap:"wrap", flexShrink:0 }}>
-                {CHIPS.map((c) => <button key={c} className="chip" onClick={() => handleChip(c)}>{c}</button>)}
+              <div style={{ padding:"0 28px 14px", display:"flex", gap:7, flexWrap:"wrap" }}>
+                {SUGGESTIONS.map(s => (
+                  <button key={s} className="chip" onClick={() => handleSuggestion(s)}>
+                    <span style={{ color:"rgba(255,185,60,.4)", fontSize:".6rem", lineHeight:1 }}>›</span>
+                    {s}
+                  </button>
+                ))}
               </div>
             )}
 
-            {/* Input */}
-            <div style={{ padding:"8px 28px 18px", flexShrink:0 }}>
-              <div className="input-wrap">
+            {/* Chat input bar */}
+            <div style={{
+              flexShrink:0, padding:"10px 28px 14px",
+              borderTop:"1px solid rgba(255,185,60,.06)",
+              background:"rgba(6,3,0,.6)", backdropFilter:"blur(20px)",
+            }}>
+              <form onSubmit={handleSend} style={{ display:"flex", gap:10, alignItems:"flex-end" }}>
                 <textarea
                   ref={inputRef}
+                  className="chat-input"
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
-                  placeholder={connected ? "Describe what you want to do with your crypto..." : "Connect your wallet to get started..."}
+                  placeholder="Describe what you want to do with your crypto…"
                   rows={1}
+                  disabled={isLoading}
+                  style={{ flex:1, padding:"12px 16px", minHeight:46, maxHeight:140 }}
                 />
-                <button className="send-btn" onClick={handleSend} disabled={!input.trim() || isLoading}>
-                  <span className="msym" style={{ fontSize:18 }}>send</span>
+                <button type="submit" className="send-btn" disabled={isLoading || !input.trim()}>
+                  {isLoading
+                    ? <span style={{ width:16, height:16, border:"2px solid rgba(26,12,0,.3)",
+                        borderTop:"2px solid rgba(26,12,0,.9)", borderRadius:"50%",
+                        display:"inline-block", animation:"spin .8s linear infinite" }} />
+                    : <span className="ms" style={{ fontSize:18, color:"#150800", fontVariationSettings:"'FILL' 1,'wght' 500,'GRAD' 0,'opsz' 24" }}>send</span>
+                  }
                 </button>
-              </div>
-              <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".48rem", fontWeight:600, letterSpacing:".2em", textTransform:"uppercase", color:"rgba(255,200,120,.18)", textAlign:"center", marginTop:7 }}>
+              </form>
+              <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".4rem", fontWeight:600,
+                letterSpacing:".16em", textTransform:"uppercase", color:"rgba(255,215,150,.16)",
+                textAlign:"center", marginTop:8 }}>
                 DOMINUS NEVER EXECUTES WITHOUT YOUR EXPLICIT CONFIRMATION
               </p>
             </div>
           </main>
 
-          {/* ── RIGHT PANEL ── */}
-          <aside style={{
-            width:276, flexShrink:0,
-            display:"flex", flexDirection:"column",
-            background:"rgba(8,5,2,.4)",
-            backdropFilter:"blur(20px)", WebkitBackdropFilter:"blur(20px)",
-            borderLeft:"1px solid rgba(255,180,50,.07)",
-            overflowY:"auto",
+          {/* ══ RIGHT PANEL — dynamic, replaces static Neural Feedback etc ══ */}
+          <div style={{
+            width: 300, flexShrink:0, height:"100%", overflowY:"auto",
+            borderLeft:"1px solid rgba(255,185,60,.07)",
+            background:"rgba(4,2,0,.65)", backdropFilter:"blur(16px)",
           }}>
+            <RightPanel
+              walletAddress={walletAddress || undefined}
+              activityLog={activityLog}
+            />
+          </div>
 
-            {/* Cam feed */}
-            <div style={{ padding:14, borderBottom:"1px solid rgba(255,180,50,.07)" }}>
-              <div className="cam">
-                <div className="hud-grid" style={{ position:"absolute", inset:0, opacity:1 }} />
-                <div className="scanlines" />
-                {/* Corner brackets on cam */}
-                {[
-                  { top:7, left:7, borderTop:"1px solid rgba(255,185,60,.3)", borderLeft:"1px solid rgba(255,185,60,.3)" },
-                  { top:7, right:7, borderTop:"1px solid rgba(255,185,60,.3)", borderRight:"1px solid rgba(255,185,60,.3)" },
-                  { bottom:7, left:7, borderBottom:"1px solid rgba(255,185,60,.3)", borderLeft:"1px solid rgba(255,185,60,.3)" },
-                  { bottom:7, right:7, borderBottom:"1px solid rgba(255,185,60,.3)", borderRight:"1px solid rgba(255,185,60,.3)" },
-                ].map((s, i) => (
-                  <div key={i} style={{ position:"absolute", width:11, height:11, ...s, pointerEvents:"none" }} />
-                ))}
-                <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                  <span className="msym" style={{ fontSize:32, color:"rgba(255,185,60,.08)" }}>videocam</span>
-                </div>
-                {/* Live badge */}
-                <div style={{ position:"absolute", bottom:9, left:11, display:"flex", alignItems:"center", gap:5 }}>
-                  <span style={{ width:5, height:5, borderRadius:"50%", background:"#B1CFF6", animation:"blink 2s ease-in-out infinite" }} />
-                  <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".46rem", letterSpacing:".14em", color:"#B1CFF6" }}>LIVE FEED / CAM-04</span>
-                </div>
-                <div style={{ position:"absolute", top:9, right:11 }}>
-                  <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".46rem", color:"rgba(255,200,120,.25)", letterSpacing:".08em" }}>{clock}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Live Protocol Feed */}
-            <div style={{ padding:"16px 18px", borderBottom:"1px solid rgba(255,180,50,.07)" }}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-                <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".55rem", fontWeight:700, letterSpacing:".2em", textTransform:"uppercase", color:"rgba(255,185,60,.75)" }}>
-                  LIVE PROTOCOL FEED
-                </span>
-                <span style={{ width:6, height:6, borderRadius:"50%", background:"#FFC060", boxShadow:"0 0 6px rgba(255,185,60,.8)", animation:"blink 3s ease-in-out infinite" }} />
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
-                {[
-                  { label:"SYNC",    value:"94.2%" },
-                  { label:"LATENCY", value:"0.02ms"},
-                  { label:"STATUS",  value:"ACTIVE"},
-                ].map(({ label, value }) => (
-                  <div key={label}>
-                    <span className="stat-lbl">{label}</span>
-                    <span className="stat-val">{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Neural Feedback */}
-            <div style={{ padding:"16px 18px", borderBottom:"1px solid rgba(255,180,50,.07)" }}>
-              <p style={{ fontFamily:"'Noto Serif',serif", fontSize:".95rem", color:"#D8C3AD", marginBottom:14, lineHeight:1 }}>
-                Neural Feedback
-              </p>
-              <div style={{ display:"flex", flexDirection:"column", gap:13 }}>
-                {NEURAL_METRICS.map(({ label, value, pct }) => (
-                  <div key={label}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-                      <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".48rem", letterSpacing:".18em", textTransform:"uppercase", color:"rgba(255,200,120,.28)" }}>{label}</span>
-                      <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".5rem", fontWeight:700, letterSpacing:".1em", color:"rgba(255,185,60,.8)" }}>{value}</span>
-                    </div>
-                    <div style={{ height:2, background:"rgba(255,180,50,.12)", borderRadius:1 }}>
-                      <div style={{ height:"100%", width:`${pct}%`, background:"linear-gradient(to right,#FFC060,#F59E0B)", borderRadius:1 }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Protocol Archive */}
-            <div style={{ padding:"16px 18px", flex:1 }}>
-              <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".5rem", fontWeight:700, letterSpacing:".2em", textTransform:"uppercase", color:"rgba(255,200,120,.25)", marginBottom:12 }}>
-                PROTOCOL ARCHIVE
-              </p>
-              <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-                {PROTOCOL_LOG.map(({ time, desc }) => (
-                  <div key={time + desc}>
-                    <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".52rem", fontWeight:700, color:"rgba(255,185,60,.42)", letterSpacing:".08em" }}>[{time}]</span>
-                    <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".62rem", color:"rgba(255,200,120,.28)", marginTop:3, lineHeight:1.5 }}>{desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </aside>
         </div>
 
-        {/* ════ STATUS BAR ════ */}
-        <div style={{
-          height:38, flexShrink:0, position:"relative", zIndex:40,
+        {/* ══ STATUS BAR ═══════════════════════════════════════════════════ */}
+        <div className="status-bar" style={{
+          height:36, flexShrink:0,
           display:"flex", alignItems:"center", justifyContent:"space-between",
-          padding:"0 2rem",
-          background:"rgba(5,3,1,.92)",
-          backdropFilter:"blur(16px)", WebkitBackdropFilter:"blur(16px)",
-          borderTop:"1px solid rgba(255,180,50,.08)",
+          padding:"0 1.4rem",
         }}>
-          <div style={{ display:"flex", alignItems:"center", gap:"1rem" }}>
-            <span style={{
-              width:6, height:6, borderRadius:"50%", flexShrink:0,
-              background: connected ? "#FFC060" : "#2a2520",
-              boxShadow: connected ? "0 0 8px rgba(255,185,60,.85)" : "none",
-              animation: connected ? "blink 3s ease-in-out infinite" : "none",
-            }} />
-            <span className="sb-txt">{connected ? "CORE PRIME CONNECTED" : "WALLET NOT CONNECTED"}</span>
-            <div style={{ width:1, height:12, background:"rgba(255,180,50,.14)" }} />
-            <span className="sb-txt" style={{ opacity:.7 }}>{llmLabel}</span>
+          <div style={{ display:"flex", alignItems:"center", gap:".75rem" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+              <span style={{ width:5, height:5, borderRadius:"50%", background:"#FFC060",
+                boxShadow:"0 0 7px rgba(255,185,60,.95)", display:"inline-block",
+                animation:"blink 2.9s ease-in-out infinite" }} />
+              <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".42rem", fontWeight:600,
+                letterSpacing:".18em", textTransform:"uppercase", color:"rgba(255,210,130,.34)" }}>
+                CORE PRIME CONNECTED
+              </span>
+            </div>
+            <div style={{ width:1, height:10, background:"rgba(255,180,50,.12)" }} />
+            <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".42rem", fontWeight:600,
+              letterSpacing:".16em", textTransform:"uppercase", color:"rgba(255,210,130,.28)" }}>
+              {llmConfig?.mode === "ollama"
+                ? `OLLAMA — ${(llmConfig.ollamaModel ?? "llama3.1:8b").toUpperCase()}`
+                : llmConfig?.mode === "api"
+                  ? `${llmConfig.provider?.toUpperCase() ?? "API"} — ${llmConfig.model || "DEFAULT"}`
+                  : "OLLAMA — LLAMA3.1:8B"}
+            </span>
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:"1rem" }}>
-            <div style={{ display:"flex", gap:4 }}>
-              {[true, true, false].map((a, i) => (
-                <div key={i} style={{ width:26, height:2, borderRadius:1, background: a ? "rgba(255,185,60,.65)" : "rgba(255,185,60,.15)" }} />
+          <div style={{ display:"flex", alignItems:"center", gap:".75rem" }}>
+            <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".42rem", fontWeight:600,
+              letterSpacing:".16em", textTransform:"uppercase", color:"rgba(255,215,140,.2)" }}>
+              {network}
+            </span>
+            <div style={{ width:1, height:10, background:"rgba(255,180,50,.12)" }} />
+            <div style={{ display:"flex", gap:3, alignItems:"center" }}>
+              {[22,9,16].map((w,i) => (
+                <div key={i} style={{ width:w, height:2, borderRadius:1,
+                  background: i!==1 ? "rgba(255,185,60,.6)" : "rgba(255,185,60,.16)",
+                  boxShadow: i!==1 ? "0 0 4px rgba(245,158,11,.4)" : "none" }} />
               ))}
             </div>
-            <span className="sb-txt">v1.0.0 — {network}</span>
+            <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".42rem", fontWeight:600,
+              letterSpacing:".16em", textTransform:"uppercase", color:"rgba(255,210,130,.28)" }}>
+              V2.4.9-SECURE
+            </span>
           </div>
         </div>
 
-        <LLMSettings
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          onSave={(cfg) => { setLLMConfig(cfg); setIsSettingsOpen(false) }}
-        />
       </div>
+
+      {/* ══ LLM SETTINGS PANEL ════════════════════════════════════════════ */}
+      <LLMSettings
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onSave={(cfg) => { setLlmConfig(cfg); setSettingsOpen(false) }}
+      />
     </>
   )
 }
+
+function pad(n: number) { return n.toString().padStart(2, "0") }
