@@ -24,8 +24,12 @@ function buildFirePalette(): Uint32Array {
   return p
 }
 
+function shortenAddress(addr: string, chars = 4) {
+  return `${addr.slice(0, chars)}…${addr.slice(-chars)}`
+}
+
 export default function LandingPage() {
-  const { connected } = useWallet()
+  const { connected, publicKey, disconnect } = useWallet()
   const { setVisible } = useWalletModal()
   const router = useRouter()
 
@@ -36,7 +40,7 @@ export default function LandingPage() {
 
   const fireRef     = useRef<HTMLCanvasElement>(null)
   const particleRef = useRef<HTMLCanvasElement>(null)
-  const auroraRef   = useRef<HTMLCanvasElement>(null)   // NEW — aurora nebula bg
+  const auroraRef   = useRef<HTMLCanvasElement>(null)
   const portalRef   = useRef<HTMLDivElement>(null)
   const heroTextRef = useRef<HTMLDivElement>(null)
   const lHudRef     = useRef<HTMLDivElement>(null)
@@ -45,7 +49,8 @@ export default function LandingPage() {
   const rafRef      = useRef<number>(0)
 
   useEffect(() => { setMounted(true) }, [])
-  useEffect(() => { if (connected) router.push("/chat") }, [connected, router])
+
+  // ── FIX #3: NO redirect when connected. We show a connected state instead. ──
 
   useEffect(() => {
     const e = setInterval(() => setEpoch(p => parseFloat((p + 0.01).toFixed(2))), 90)
@@ -83,53 +88,37 @@ export default function LandingPage() {
 
   useEffect(() => startRAF(), [startRAF])
 
-  // ── AURORA NEBULA BACKGROUND ─────────────────────────────────────────────
-  // Replaces generic CSS circles with flowing energy ribbons + depth fog
+  // ── AURORA NEBULA ─────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = auroraRef.current
     if (!canvas) return
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    const resize = () => {
-      canvas.width  = window.innerWidth
-      canvas.height = window.innerHeight
-    }
+    const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight }
     resize()
     window.addEventListener("resize", resize, { passive: true })
 
-    // Each ribbon is a bezier-traced sinusoidal energy band
-    type Ribbon = {
-      phase: number
-      speed: number
-      amplitude: number
-      yBase: number
-      hue: number      // 20–42 for amber/orange range
-      alpha: number
-      width: number
-      waveLen: number
-    }
-
+    type Ribbon = { phase:number; speed:number; amplitude:number; yBase:number; hue:number; alpha:number; width:number; waveLen:number }
     const ribbons: Ribbon[] = Array.from({ length: 18 }, (_, i) => ({
-      phase:     Math.random() * Math.PI * 2,
-      speed:     0.0004 + Math.random() * 0.0006,
-      amplitude: 40  + Math.random() * 120,
-      yBase:     0.25 + (i / 18) * 0.55,
-      hue:       18  + Math.random() * 26,
-      alpha:     0.012 + Math.random() * 0.028,
-      width:     60  + Math.random() * 180,
-      waveLen:   0.003 + Math.random() * 0.004,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.0004 + Math.random() * 0.0006,
+      amplitude: 40 + Math.random() * 120,
+      yBase: 0.25 + (i / 18) * 0.55,
+      hue: 18 + Math.random() * 26,
+      alpha: 0.012 + Math.random() * 0.028,
+      width: 60 + Math.random() * 180,
+      waveLen: 0.003 + Math.random() * 0.004,
     }))
 
-    // Floating orbs — depth blobs that pulse
-    type Orb = { x: number; y: number; r: number; phase: number; speed: number; hue: number; alpha: number }
+    type Orb = { x:number; y:number; r:number; phase:number; speed:number; hue:number; alpha:number }
     const orbs: Orb[] = Array.from({ length: 6 }, () => ({
-      x:     0.2 + Math.random() * 0.6,
-      y:     0.2 + Math.random() * 0.6,
-      r:     120 + Math.random() * 220,
+      x: 0.2 + Math.random() * 0.6,
+      y: 0.2 + Math.random() * 0.6,
+      r: 120 + Math.random() * 220,
       phase: Math.random() * Math.PI * 2,
       speed: 0.0003 + Math.random() * 0.0004,
-      hue:   16 + Math.random() * 30,
+      hue: 16 + Math.random() * 30,
       alpha: 0.04 + Math.random() * 0.06,
     }))
 
@@ -139,7 +128,6 @@ export default function LandingPage() {
       const W = canvas.width, H = canvas.height
       ctx.clearRect(0, 0, W, H)
 
-      // 1 — pulsing depth orbs (the "nebula clouds")
       orbs.forEach(orb => {
         const pulse = 0.7 + 0.3 * Math.sin(t * orb.speed * 1000 + orb.phase)
         const r = orb.r * pulse
@@ -155,7 +143,6 @@ export default function LandingPage() {
         ctx.fill()
       })
 
-      // 2 — energy ribbons (flowing sine bands)
       ribbons.forEach(rb => {
         const yc = rb.yBase * H
         const steps = Math.ceil(W / 6)
@@ -172,7 +159,6 @@ export default function LandingPage() {
         ctx.filter      = "none"
       })
 
-      // 3 — thin sharp energy filaments on top
       ribbons.slice(0, 8).forEach(rb => {
         const yc = rb.yBase * H
         ctx.beginPath()
@@ -195,7 +181,7 @@ export default function LandingPage() {
     return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", resize) }
   }, [])
 
-  // ── DOOM FIRE ────────────────────────────────────────────────────────────
+  // ── DOOM FIRE ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = fireRef.current
     if (!canvas) return
@@ -237,7 +223,7 @@ export default function LandingPage() {
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  // ── PARTICLES ────────────────────────────────────────────────────────────
+  // ── PARTICLES ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = particleRef.current
     if (!canvas) return
@@ -284,7 +270,7 @@ export default function LandingPage() {
     return () => { cancelAnimationFrame(raf); window.removeEventListener("resize",resize) }
   }, [])
 
-  if (!mounted) return <div style={{ background:"#060300", width:"100vw", height:"100vh" }} />
+  if (!mounted) return <div style={{ background:"#09090B", width:"100vw", height:"100vh" }} />
 
   const network = process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet-beta" ? "MAINNET" : "DEVNET"
 
@@ -302,26 +288,9 @@ export default function LandingPage() {
           0%,100%{filter:drop-shadow(0 0 22px rgba(245,158,11,.8)) drop-shadow(0 0 65px rgba(245,120,10,.32))}
           50%{filter:drop-shadow(0 0 48px rgba(255,205,20,1)) drop-shadow(0 0 115px rgba(245,140,10,.52))}
         }
-        /* Portal aura — orange light bleeding from behind */
         @keyframes portalAura{
-          0%,100%{
-            box-shadow:
-              0 0 0 1px rgba(255,200,80,.12),
-              0 0 60px 10px rgba(245,130,10,.55),
-              0 0 130px 30px rgba(245,100,5,.3),
-              0 0 260px 60px rgba(220,80,5,.15),
-              0 50px 120px rgba(0,0,0,.9),
-              inset 0 0 60px rgba(255,150,20,.1)
-          }
-          50%{
-            box-shadow:
-              0 0 0 1px rgba(255,215,80,.18),
-              0 0 90px 18px rgba(255,165,20,.72),
-              0 0 200px 50px rgba(245,120,10,.4),
-              0 0 380px 80px rgba(220,90,5,.2),
-              0 50px 120px rgba(0,0,0,.9),
-              inset 0 0 100px rgba(255,185,35,.16)
-          }
+          0%,100%{box-shadow:0 0 0 1px rgba(255,200,80,.12),0 0 60px 10px rgba(245,130,10,.55),0 0 130px 30px rgba(245,100,5,.3),0 0 260px 60px rgba(220,80,5,.15),0 50px 120px rgba(0,0,0,.9),inset 0 0 60px rgba(255,150,20,.1)}
+          50%{box-shadow:0 0 0 1px rgba(255,215,80,.18),0 0 90px 18px rgba(255,165,20,.72),0 0 200px 50px rgba(245,120,10,.4),0 0 380px 80px rgba(220,90,5,.2),0 50px 120px rgba(0,0,0,.9),inset 0 0 100px rgba(255,185,35,.16)}
         }
         @keyframes blink{0%,100%{opacity:1}50%{opacity:.14}}
         @keyframes beamPulse{0%,100%{opacity:.22}50%{opacity:.72}}
@@ -337,6 +306,7 @@ export default function LandingPage() {
         @keyframes shimmerSweep{0%{background-position:-250% 0}100%{background-position:250% 0}}
         @keyframes dataScroll{0%{transform:translateY(0)}100%{transform:translateY(-50%)}}
         @keyframes cornerIn{from{opacity:0;transform:scale(.35)}to{opacity:1;transform:scale(1)}}
+        @keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 
         .a0{animation:fadeUp .9s cubic-bezier(.22,1,.36,1) both}
         .a1{animation:fadeUp .9s cubic-bezier(.22,1,.36,1) .12s both}
@@ -345,141 +315,150 @@ export default function LandingPage() {
         .a4{animation:fadeUp .9s cubic-bezier(.22,1,.36,1) .58s both}
         .a5{animation:fadeUp .9s cubic-bezier(.22,1,.36,1) .76s both}
 
+        /* ── Updated glass: zinc-dark tinted instead of warm brown ── */
         .glass{
-          background:linear-gradient(135deg,rgba(255,255,255,.07) 0%,rgba(255,185,55,.025) 50%,rgba(255,255,255,.044) 100%);
-          backdrop-filter:blur(28px) saturate(1.6) brightness(1.06);
-          -webkit-backdrop-filter:blur(28px) saturate(1.6) brightness(1.06);
-          border:1px solid rgba(255,185,60,.2);
-          border-top:1px solid rgba(255,255,255,.14);
-          box-shadow:
-            inset 0 1.5px 0 rgba(255,255,255,.09),
-            inset 0 -1px 0 rgba(0,0,0,.18),
-            0 10px 50px rgba(0,0,0,.68),
-            0 0 32px rgba(245,158,11,.055);
+          background:linear-gradient(135deg,rgba(255,255,255,.065) 0%,rgba(245,158,11,.018) 50%,rgba(255,255,255,.042) 100%);
+          backdrop-filter:blur(28px) saturate(1.5) brightness(1.04);
+          -webkit-backdrop-filter:blur(28px) saturate(1.5) brightness(1.04);
+          border:1px solid rgba(255,255,255,.08);
+          border-top:1px solid rgba(255,255,255,.12);
+          border-left:1px solid rgba(255,255,255,.06);
+          box-shadow:inset 0 1.5px 0 rgba(255,255,255,.07),inset 0 -1px 0 rgba(0,0,0,.2),0 10px 50px rgba(0,0,0,.72),0 0 28px rgba(245,158,11,.04);
           position:relative;overflow:hidden;border-radius:12px;
         }
         .glass::before{
           content:'';position:absolute;inset:0;pointer-events:none;border-radius:12px;
-          background:linear-gradient(108deg,transparent 24%,rgba(255,255,255,.062) 50%,transparent 76%);
+          background:linear-gradient(108deg,transparent 24%,rgba(255,255,255,.055) 50%,transparent 76%);
           background-size:250% 100%;animation:shimmerSweep 11s ease-in-out infinite;
         }
-        .glass-top{position:absolute;top:0;left:0;right:0;height:1.5px;background:linear-gradient(90deg,transparent,rgba(255,205,70,.58),transparent);border-radius:12px 12px 0 0}
-        .glass-bot{position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,185,60,.22),transparent);border-radius:0 0 12px 12px}
+        .glass-top{position:absolute;top:0;left:0;right:0;height:1.5px;background:linear-gradient(90deg,transparent,rgba(245,158,11,.45),transparent);border-radius:12px 12px 0 0}
+        .glass-bot{position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(245,158,11,.18),transparent);border-radius:0 0 12px 12px}
 
+        /* ── Nav: cleaner zinc dark ── */
         .nav-glass{
-          background:linear-gradient(180deg,rgba(5,2,0,.84) 0%,rgba(3,1,0,.65) 100%);
-          backdrop-filter:blur(32px) saturate(1.8);-webkit-backdrop-filter:blur(32px) saturate(1.8);
-          border-bottom:1px solid rgba(255,185,60,.09);
-          box-shadow:0 1px 0 rgba(255,255,255,.034),0 20px 58px rgba(0,0,0,.6);
+          background:rgba(9,9,11,.82);
+          backdrop-filter:blur(32px) saturate(1.6);-webkit-backdrop-filter:blur(32px) saturate(1.6);
+          border-bottom:1px solid rgba(255,255,255,.07);
+          box-shadow:0 1px 0 rgba(255,255,255,.03),0 20px 58px rgba(0,0,0,.6);
         }
         .sb-glass{
-          background:linear-gradient(0deg,rgba(3,1,0,.96) 0%,rgba(5,2,0,.84) 100%);
+          background:rgba(9,9,11,.88);
           backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);
-          border-top:1px solid rgba(255,185,60,.08);
-          box-shadow:0 -14px 46px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.027);
+          border-top:1px solid rgba(255,255,255,.06);
+          box-shadow:0 -14px 46px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.025);
         }
 
+        /* ── CTA button: same amber gradient, kept ── */
         .btn-cta{
           position:relative;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;
           font-family:'Space Grotesk',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.3em;text-transform:uppercase;
-          color:#120700;
-          background:linear-gradient(135deg,#FFE980 0%,#FFD060 16%,#FFAC10 55%,#F59E0B 74%,#D97706 100%);
-          border:none;border-radius:10px;cursor:pointer;overflow:hidden;
-          box-shadow:0 0 0 1px rgba(255,215,80,.28),0 0 44px rgba(245,158,11,.72),0 0 95px rgba(245,128,10,.28),0 6px 30px rgba(0,0,0,.72),inset 0 1.5px 0 rgba(255,255,255,.5),inset 0 -1px 0 rgba(0,0,0,.22);
+          color:#1C0A00;
+          background:linear-gradient(135deg,#FCD34D 0%,#F59E0B 55%,#D97706 100%);
+          border:none;border-radius:8px;cursor:pointer;overflow:hidden;
+          box-shadow:0 0 0 1px rgba(255,215,80,.25),0 0 44px rgba(245,158,11,.65),0 0 90px rgba(245,128,10,.22),0 6px 30px rgba(0,0,0,.7),inset 0 1.5px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(0,0,0,.2);
           transition:transform .22s cubic-bezier(.22,1,.36,1),box-shadow .22s;
-          text-shadow:0 1px 0 rgba(255,255,255,.38);
+          text-shadow:0 1px 0 rgba(255,255,255,.35);
         }
-        .btn-cta::before{content:'';position:absolute;inset:-3px;border:1px solid rgba(255,220,80,.7);border-radius:13px;filter:blur(5px);pointer-events:none;animation:beamPulse 2.8s ease-in-out infinite}
-        .btn-cta:hover{transform:scale(1.055) translateY(-2px);box-shadow:0 0 0 1px rgba(255,220,80,.5),0 0 62px rgba(255,185,10,.98),0 0 145px rgba(245,140,10,.44),0 20px 55px rgba(0,0,0,.75),inset 0 1.5px 0 rgba(255,255,255,.5),inset 0 -1px 0 rgba(0,0,0,.22)}
+        .btn-cta::before{content:'';position:absolute;inset:-3px;border:1px solid rgba(255,220,80,.65);border-radius:11px;filter:blur(5px);pointer-events:none;animation:beamPulse 2.8s ease-in-out infinite}
+        .btn-cta:hover{transform:scale(1.055) translateY(-2px);box-shadow:0 0 0 1px rgba(255,220,80,.45),0 0 62px rgba(255,185,10,.95),0 0 140px rgba(245,140,10,.4),0 20px 55px rgba(0,0,0,.72),inset 0 1.5px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(0,0,0,.2)}
         .btn-cta:active{transform:scale(.97)}
-        .btn-shine{position:absolute;inset:0;background:linear-gradient(108deg,transparent 28%,rgba(255,255,255,.26) 50%,transparent 72%);background-size:250% 100%;background-position:250% 0;transition:background-position .5s}
+        .btn-shine{position:absolute;inset:0;background:linear-gradient(108deg,transparent 28%,rgba(255,255,255,.24) 50%,transparent 72%);background-size:250% 100%;background-position:250% 0;transition:background-position .5s}
         .btn-cta:hover .btn-shine{background-position:-250% 0}
 
-        .btn-ghost{font-family:'Space Grotesk',sans-serif;font-size:.58rem;font-weight:500;letter-spacing:.26em;text-transform:uppercase;color:rgba(255,210,140,.3);background:none;border:none;border-bottom:1px solid transparent;padding-bottom:2px;cursor:pointer;transition:color .2s,border-color .2s}
-        .btn-ghost:hover{color:rgba(255,195,90,.72);border-bottom-color:rgba(255,185,60,.35)}
+        .btn-ghost{font-family:'Space Grotesk',sans-serif;font-size:.58rem;font-weight:500;letter-spacing:.26em;text-transform:uppercase;color:rgba(255,255,255,.2);background:none;border:none;border-bottom:1px solid transparent;padding-bottom:2px;cursor:pointer;transition:color .2s,border-color .2s}
+        .btn-ghost:hover{color:rgba(245,158,11,.65);border-bottom-color:rgba(245,158,11,.3)}
 
-        .nav-lnk{font-family:'Space Grotesk',sans-serif;font-size:.64rem;font-weight:700;letter-spacing:.17em;text-transform:uppercase;color:rgba(255,220,160,.38);background:none;border:none;border-bottom:1.5px solid transparent;padding-bottom:3px;cursor:pointer;transition:color .2s,border-color .2s;text-decoration:none}
-        .nav-lnk:hover,.nav-lnk.on{color:#F59E0B;border-bottom-color:rgba(245,158,11,.72)}
+        .nav-lnk{font-family:'Space Grotesk',sans-serif;font-size:.64rem;font-weight:700;letter-spacing:.17em;text-transform:uppercase;color:rgba(255,255,255,.2);background:none;border:none;border-bottom:1.5px solid transparent;padding-bottom:3px;cursor:pointer;transition:color .2s,border-color .2s;text-decoration:none}
+        .nav-lnk:hover,.nav-lnk.on{color:#F59E0B;border-bottom-color:rgba(245,158,11,.7)}
 
-        .hl{font-family:'Space Grotesk',sans-serif;font-size:.42rem;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,215,150,.24);display:block;margin-bottom:4px}
-        .hv{font-family:'Space Grotesk',sans-serif;font-size:.65rem;font-weight:700;letter-spacing:.12em;color:rgba(255,188,68,.88)}
-        .sb{font-family:'Space Grotesk',sans-serif;font-size:.43rem;font-weight:600;letter-spacing:.19em;text-transform:uppercase;color:rgba(255,210,130,.34)}
+        /* HUD data text ── updated to zinc-warm neutral */
+        .hl{font-family:'Space Grotesk',sans-serif;font-size:.42rem;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.18);display:block;margin-bottom:4px}
+        .hv{font-family:'Space Grotesk',sans-serif;font-size:.65rem;font-weight:700;letter-spacing:.12em;color:rgba(245,158,11,.82)}
+        .sb{font-family:'Space Grotesk',sans-serif;font-size:.43rem;font-weight:600;letter-spacing:.19em;text-transform:uppercase;color:rgba(255,255,255,.2)}
 
         .proto{
           display:flex;flex-direction:column;gap:5px;padding:.68rem .95rem;
-          background:linear-gradient(135deg,rgba(255,255,255,.05) 0%,rgba(255,185,55,.02) 100%);
+          background:rgba(255,255,255,.04);
           backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-          border:1px solid rgba(255,185,60,.12);border-top:1px solid rgba(255,255,255,.08);
-          border-radius:10px;
+          border:1px solid rgba(255,255,255,.07);
+          border-radius:8px;
           transition:border-color .25s,box-shadow .25s,transform .25s cubic-bezier(.22,1,.36,1);
           box-shadow:0 4px 20px rgba(0,0,0,.4);
         }
-        .proto:hover{border-color:rgba(255,185,60,.3);box-shadow:0 0 22px rgba(245,158,11,.12),0 8px 32px rgba(0,0,0,.55);transform:translateY(-2px)}
+        .proto:hover{border-color:rgba(245,158,11,.25);box-shadow:0 0 22px rgba(245,158,11,.1),0 8px 32px rgba(0,0,0,.55);transform:translateY(-2px)}
 
-        .stat-pill{display:flex;flex-direction:column;align-items:center;gap:4px;padding:.65rem 1.3rem;background:rgba(255,185,60,.038);border:1px solid rgba(255,185,60,.1);border-radius:10px;transition:border-color .2s,background .2s;box-shadow:0 4px 18px rgba(0,0,0,.38)}
-        .stat-pill:hover{border-color:rgba(255,185,60,.24);background:rgba(255,185,60,.062)}
+        .stat-pill{display:flex;flex-direction:column;align-items:center;gap:4px;padding:.65rem 1.3rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:8px;transition:border-color .2s,background .2s;box-shadow:0 4px 18px rgba(0,0,0,.38)}
+        .stat-pill:hover{border-color:rgba(245,158,11,.22);background:rgba(245,158,11,.05)}
 
         .feed-wrap{height:90px;overflow:hidden;position:relative}
         .feed-wrap::before,.feed-wrap::after{content:'';position:absolute;left:0;right:0;height:22px;z-index:2;pointer-events:none}
-        .feed-wrap::before{top:0;background:linear-gradient(180deg,rgba(4,2,0,.95),transparent)}
-        .feed-wrap::after{bottom:0;background:linear-gradient(0deg,rgba(4,2,0,.95),transparent)}
+        .feed-wrap::before{top:0;background:linear-gradient(180deg,rgba(9,9,11,.95),transparent)}
+        .feed-wrap::after{bottom:0;background:linear-gradient(0deg,rgba(9,9,11,.95),transparent)}
         .feed-inner{animation:dataScroll 17s linear infinite}
         .feed-inner:hover{animation-play-state:paused}
 
         .hud-grid{
           background-size:42px 42px;
-          background-image:linear-gradient(to right,rgba(255,175,50,.038) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,175,50,.038) 1px,transparent 1px);
+          background-image:linear-gradient(to right,rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,.025) 1px,transparent 1px);
         }
         .floor-grid{
           background-size:70px 70px;
-          background-image:linear-gradient(to right,rgba(245,158,11,.1) 1px,transparent 1px),linear-gradient(to bottom,rgba(245,158,11,.07) 1px,transparent 1px);
+          background-image:linear-gradient(to right,rgba(245,158,11,.08) 1px,transparent 1px),linear-gradient(to bottom,rgba(245,158,11,.06) 1px,transparent 1px);
           transform:perspective(540px) rotateX(74deg) translateY(-8%);
           transform-origin:50% 100%;
         }
 
-        /* ── PORTAL image box ── */
-        .portal-box{
-          position:relative;overflow:hidden;
+        .portal-box{position:relative;overflow:hidden;border-radius:12px;animation:portalAura 5.5s ease-in-out infinite}
+
+        /* ── Connected overlay card ── */
+        .connected-card{
+          background:rgba(9,9,11,.9);
+          backdrop-filter:blur(32px);-webkit-backdrop-filter:blur(32px);
+          border:1px solid rgba(245,158,11,.2);
+          border-top:1px solid rgba(245,158,11,.35);
           border-radius:12px;
-          animation:portalAura 5.5s ease-in-out infinite;
+          box-shadow:0 0 40px rgba(245,158,11,.08),0 20px 60px rgba(0,0,0,.8);
+          animation:rise .45s cubic-bezier(.22,1,.36,1) both;
         }
+        .action-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;cursor:pointer;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);transition:all .15s}
+        .action-row:hover{background:rgba(245,158,11,.07);border-color:rgba(245,158,11,.2)}
 
         .wallet-adapter-dropdown,.wallet-adapter-button-trigger,[class*="wallet-adapter-dropdown"]{display:none!important}
         ::-webkit-scrollbar{width:3px}
-        ::-webkit-scrollbar-track{background:#0a0600}
-        ::-webkit-scrollbar-thumb{background:#534434;border-radius:1px}
-        ::-webkit-scrollbar-thumb:hover{background:#FFC174}
-        ::selection{background:rgba(255,193,116,.22)}
+        ::-webkit-scrollbar-track{background:#09090B}
+        ::-webkit-scrollbar-thumb{background:#27272E;border-radius:1px}
+        ::-webkit-scrollbar-thumb:hover{background:#F59E0B}
+        ::selection{background:rgba(245,158,11,.2)}
       `}</style>
 
-      <div style={{ position:"fixed", inset:0, background:"#060300", overflow:"hidden" }}>
+      <div style={{ position:"fixed", inset:0, background:"#09090B", overflow:"hidden" }}>
 
         {/* Sky base */}
-        <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse 75% 55% at 50% 36%,#2c1500 0%,#190e00 28%,#0e0700 52%,#050200 75%,#020100 100%)" }} />
+        <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse 75% 55% at 50% 36%,#1a1000 0%,#100900 28%,#07060A 52%,#040405 75%,#020203 100%)" }} />
 
-        {/* ── AURORA NEBULA CANVAS (replaces generic CSS circles) ── */}
+        {/* Aurora canvas */}
         <canvas ref={auroraRef} style={{ position:"absolute", inset:0, zIndex:1, pointerEvents:"none", mixBlendMode:"screen" }} />
 
         {/* HUD grid */}
-        <div className="hud-grid" style={{ position:"absolute", inset:0, opacity:.14, pointerEvents:"none", zIndex:2 }} />
+        <div className="hud-grid" style={{ position:"absolute", inset:0, opacity:.12, pointerEvents:"none", zIndex:2 }} />
 
         {/* Floor grid */}
-        <div style={{ position:"absolute", bottom:0, left:"-8%", right:"-8%", height:"44vh", zIndex:2, pointerEvents:"none", opacity:.18 }}>
+        <div style={{ position:"absolute", bottom:0, left:"-8%", right:"-8%", height:"44vh", zIndex:2, pointerEvents:"none", opacity:.15 }}>
           <div className="floor-grid" style={{ position:"absolute", inset:0 }} />
         </div>
 
         {/* Radial vignette */}
         <div style={{ position:"absolute", inset:0, zIndex:3, pointerEvents:"none",
-          background:"radial-gradient(ellipse 62% 60% at 50% 44%,transparent 0%,transparent 22%,rgba(3,1,0,.62) 68%,rgba(2,1,0,.94) 100%)" }} />
+          background:"radial-gradient(ellipse 62% 60% at 50% 44%,transparent 0%,transparent 22%,rgba(5,5,8,.6) 68%,rgba(4,4,7,.94) 100%)" }} />
 
         {/* Top/bottom overlays */}
         <div style={{ position:"absolute", inset:0, zIndex:4, pointerEvents:"none",
-          background:"linear-gradient(180deg,rgba(4,1,0,.92) 0%,rgba(4,1,0,.14) 11%,transparent 30%,transparent 58%,rgba(3,1,0,.78) 100%)" }} />
+          background:"linear-gradient(180deg,rgba(9,9,11,.9) 0%,rgba(9,9,11,.12) 11%,transparent 30%,transparent 58%,rgba(9,9,11,.8) 100%)" }} />
 
         {/* Scan line */}
         <div style={{ position:"absolute", inset:0, overflow:"hidden", zIndex:5, pointerEvents:"none" }}>
           <div style={{ position:"absolute", left:0, right:0, height:2, top:0,
-            background:"linear-gradient(180deg,transparent,rgba(255,185,40,.036),transparent)",
+            background:"linear-gradient(180deg,transparent,rgba(245,158,11,.03),transparent)",
             animation:"scanLine 30s linear infinite" }} />
         </div>
 
@@ -487,34 +466,34 @@ export default function LandingPage() {
         <canvas ref={particleRef} style={{ position:"absolute", inset:0, zIndex:10, pointerEvents:"none" }} />
 
         {/* Decorative geometry */}
-        <div style={{ position:"fixed", top:"43%", left:46, width:13, height:13, border:"1px solid rgba(255,185,60,.28)", pointerEvents:"none", zIndex:11, animation:"floatY 5.8s ease-in-out infinite" }} />
-        <div style={{ position:"fixed", top:"29%", left:76, width:7, height:7, border:"1px solid rgba(255,185,60,.15)", transform:"rotate(22deg)", pointerEvents:"none", zIndex:11, animation:"floatY 7.4s ease-in-out .9s infinite" }} />
-        <div style={{ position:"fixed", right:62, top:"25%", width:1, height:155, background:"linear-gradient(180deg,transparent,rgba(255,185,60,.48),transparent)", pointerEvents:"none", zIndex:11, animation:"beamPulse 3.5s ease-in-out infinite" }} />
-        <div style={{ position:"fixed", right:90, top:"40%", width:1, height:76, background:"linear-gradient(180deg,transparent,rgba(255,185,60,.22),transparent)", pointerEvents:"none", zIndex:11, animation:"beamPulse 4.7s ease-in-out 1.4s infinite" }} />
-        <div style={{ position:"fixed", left:0, top:"63%", width:84, height:1, background:"linear-gradient(90deg,transparent,rgba(255,185,60,.24),transparent)", pointerEvents:"none", zIndex:11, animation:"beamPulse 4.1s ease-in-out .6s infinite" }} />
+        <div style={{ position:"fixed", top:"43%", left:46, width:13, height:13, border:"1px solid rgba(245,158,11,.25)", pointerEvents:"none", zIndex:11, animation:"floatY 5.8s ease-in-out infinite" }} />
+        <div style={{ position:"fixed", top:"29%", left:76, width:7, height:7, border:"1px solid rgba(245,158,11,.12)", transform:"rotate(22deg)", pointerEvents:"none", zIndex:11, animation:"floatY 7.4s ease-in-out .9s infinite" }} />
+        <div style={{ position:"fixed", right:62, top:"25%", width:1, height:155, background:"linear-gradient(180deg,transparent,rgba(245,158,11,.4),transparent)", pointerEvents:"none", zIndex:11, animation:"beamPulse 3.5s ease-in-out infinite" }} />
+        <div style={{ position:"fixed", right:90, top:"40%", width:1, height:76, background:"linear-gradient(180deg,transparent,rgba(245,158,11,.18),transparent)", pointerEvents:"none", zIndex:11, animation:"beamPulse 4.7s ease-in-out 1.4s infinite" }} />
+        <div style={{ position:"fixed", left:0, top:"63%", width:84, height:1, background:"linear-gradient(90deg,transparent,rgba(245,158,11,.2),transparent)", pointerEvents:"none", zIndex:11, animation:"beamPulse 4.1s ease-in-out .6s infinite" }} />
 
         {/* Corner brackets */}
-        {[
+        {([
           { t:62, l:14, bt:true, bl:true, dt:".4s" },
           { t:62, r:14, bt:true, br:true, dt:".5s" },
           { b:38, l:14, bb:true, bl:true, dt:".6s" },
           { b:38, r:14, bb:true, br:true, dt:".7s" },
-        ].map((c, i) => (
+        ] as Array<{t?:number;b?:number;l?:number;r?:number;bt?:boolean;bb?:boolean;bl?:boolean;br?:boolean;dt:string}>).map((c, i) => (
           <div key={i} style={{
             position:"fixed", width:22, height:22, pointerEvents:"none", zIndex:15,
             animation:`cornerIn .7s ease-out ${c.dt} both`,
-            top:    "t" in c ? (c as {t:number}).t : undefined,
-            bottom: "b" in c ? (c as {b:number}).b : undefined,
-            left:   "l" in c ? (c as {l:number}).l : undefined,
-            right:  "r" in c ? (c as {r:number}).r : undefined,
-            borderTop:    c.bt ? "1px solid rgba(255,185,60,.38)" : undefined,
-            borderBottom: c.bb ? "1px solid rgba(255,185,60,.38)" : undefined,
-            borderLeft:   c.bl ? "1px solid rgba(255,185,60,.38)" : undefined,
-            borderRight:  c.br ? "1px solid rgba(255,185,60,.38)" : undefined,
+            top:    c.t !== undefined ? c.t : undefined,
+            bottom: c.b !== undefined ? c.b : undefined,
+            left:   c.l !== undefined ? c.l : undefined,
+            right:  c.r !== undefined ? c.r : undefined,
+            borderTop:    c.bt ? "1px solid rgba(245,158,11,.35)" : undefined,
+            borderBottom: c.bb ? "1px solid rgba(245,158,11,.35)" : undefined,
+            borderLeft:   c.bl ? "1px solid rgba(245,158,11,.35)" : undefined,
+            borderRight:  c.br ? "1px solid rgba(245,158,11,.35)" : undefined,
           }} />
         ))}
 
-        {/* ══ NAV */}
+        {/* ══ NAV ══════════════════════════════════════════════════════════ */}
         <nav className="nav-glass" style={{
           position:"fixed", top:0, left:0, right:0, zIndex:50,
           height:60, display:"flex", alignItems:"center", justifyContent:"space-between",
@@ -523,40 +502,58 @@ export default function LandingPage() {
           <div style={{ display:"flex", alignItems:"center", gap:"1.8rem" }}>
             <div style={{ display:"flex", alignItems:"center", gap:9 }}>
               <div style={{ width:27, height:27, borderRadius:8, overflow:"hidden", flexShrink:0,
-                border:"1px solid rgba(255,185,60,.36)", boxShadow:"0 0 11px rgba(245,158,11,.48)" }}>
+                border:"1px solid rgba(245,158,11,.32)", boxShadow:"0 0 11px rgba(245,158,11,.42)" }}>
                 <img src={AETHER_IMG} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }}
                   onError={e => { (e.currentTarget as HTMLImageElement).style.display="none" }} />
               </div>
               <span style={{ fontFamily:"'Noto Serif',serif", fontWeight:700, fontSize:"1.18rem",
                 letterSpacing:"-.022em", color:"#F59E0B", userSelect:"none",
-                textShadow:"0 0 13px rgba(245,158,11,.92),0 0 36px rgba(245,130,10,.4)" }}>DOMINUS</span>
+                textShadow:"0 0 14px rgba(245,158,11,.9),0 0 36px rgba(245,130,10,.35)" }}>DOMINUS</span>
             </div>
             <button className="nav-lnk on" onClick={() => router.push("/chat")}>ORACLE COMMAND</button>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             <div style={{ display:"flex", alignItems:"center", gap:6, padding:".28rem .72rem",
-              background:"rgba(255,185,60,.06)", border:"1px solid rgba(255,185,60,.11)", borderRadius:8 }}>
-              <span style={{ width:5, height:5, borderRadius:"50%", background:"#55FF88",
-                boxShadow:"0 0 7px rgba(80,255,130,.92)", display:"inline-block", animation:"blink 2.2s ease-in-out infinite" }} />
+              background:"rgba(245,158,11,.06)", border:"1px solid rgba(245,158,11,.1)", borderRadius:6 }}>
+              <span style={{ width:5, height:5, borderRadius:"50%", background:"#22C55E",
+                boxShadow:"0 0 7px rgba(34,197,94,.9)", display:"inline-block", animation:"blink 2.2s ease-in-out infinite" }} />
               <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".43rem", fontWeight:600,
-                letterSpacing:".18em", textTransform:"uppercase", color:"rgba(255,215,140,.46)" }}>{latency}ms</span>
+                letterSpacing:".18em", textTransform:"uppercase", color:"rgba(255,255,255,.3)" }}>{latency}ms</span>
             </div>
-            <button onClick={() => router.push("/chat")} style={{ background:"none", border:"none", cursor:"pointer",
-              color:"rgba(255,200,120,.3)", display:"flex", padding:4, transition:"color .2s" }}
-              onMouseEnter={e=>(e.currentTarget.style.color="rgba(255,185,60,.85)")}
-              onMouseLeave={e=>(e.currentTarget.style.color="rgba(255,200,120,.3)")}>
-              <span className="ms" style={{ fontSize:18 }}>settings</span>
-            </button>
-            <button className="btn-cta" style={{ padding:".38rem 1.15rem", fontSize:".55rem", letterSpacing:".21em" }}
-              onClick={() => setVisible(true)}>
-              <span className="btn-shine" />
-              <span className="ms" style={{ fontSize:14 }}>account_balance_wallet</span>
-              CONNECT
-            </button>
+
+            {/* ── FIX #3: show wallet address when connected, connect button when not ── */}
+            {connected && publicKey ? (
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6, padding:".3rem .75rem",
+                  background:"rgba(245,158,11,.07)", border:"1px solid rgba(245,158,11,.18)", borderRadius:6,
+                  cursor:"pointer" }}
+                  onClick={() => setVisible(true)}>
+                  <div style={{ width:6, height:6, borderRadius:"50%", background:"#F59E0B",
+                    boxShadow:"0 0 5px rgba(245,158,11,.8)" }} />
+                  <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".6rem", fontWeight:500,
+                    letterSpacing:".06em", color:"rgba(245,158,11,.75)" }}>
+                    {shortenAddress(publicKey.toString())}
+                  </span>
+                </div>
+                <button className="btn-cta" style={{ padding:".38rem 1.1rem", fontSize:".55rem", letterSpacing:".18em" }}
+                  onClick={() => router.push("/chat")}>
+                  <span className="btn-shine" />
+                  <span className="ms" style={{ fontSize:14 }}>psychology</span>
+                  ORACLE
+                </button>
+              </div>
+            ) : (
+              <button className="btn-cta" style={{ padding:".38rem 1.15rem", fontSize:".55rem", letterSpacing:".21em" }}
+                onClick={() => setVisible(true)}>
+                <span className="btn-shine" />
+                <span className="ms" style={{ fontSize:14 }}>account_balance_wallet</span>
+                CONNECT
+              </button>
+            )}
           </div>
         </nav>
 
-        {/* ══ LEFT HUD */}
+        {/* ══ LEFT HUD ══════════════════════════════════════════════════════ */}
         <div ref={lHudRef} className="a1" style={{ position:"fixed", left:"1.15rem", top:"50%", zIndex:20, willChange:"transform" }}>
           <div className="glass" style={{ padding:"1.25rem 1.05rem", minWidth:138, display:"flex", flexDirection:"column", gap:"1.15rem" }}>
             <div className="glass-top" />
@@ -568,12 +565,13 @@ export default function LandingPage() {
             <div>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
                 <span className="hl" style={{ marginBottom:0 }}>SYNC RATIO</span>
-                <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".43rem", fontWeight:700, letterSpacing:".12em", color:"rgba(255,188,60,.65)" }}>94.2%</span>
+                <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".43rem", fontWeight:700,
+                  letterSpacing:".12em", color:"rgba(245,158,11,.6)" }}>94.2%</span>
               </div>
-              <div style={{ height:2, background:"rgba(255,185,60,.1)", borderRadius:1 }}>
+              <div style={{ height:2, background:"rgba(255,255,255,.06)", borderRadius:1 }}>
                 <div style={{ width:"94.2%", height:"100%", borderRadius:1,
-                  background:"linear-gradient(90deg,#D97706,#F59E0B,#FFD060)",
-                  boxShadow:"0 0 7px rgba(245,158,11,.6)" }} />
+                  background:"linear-gradient(90deg,#D97706,#F59E0B,#FCD34D)",
+                  boxShadow:"0 0 7px rgba(245,158,11,.5)" }} />
               </div>
             </div>
             <div>
@@ -581,7 +579,8 @@ export default function LandingPage() {
               <div className="feed-wrap">
                 <div className="feed-inner" style={{ display:"flex", flexDirection:"column", gap:5 }}>
                   {["[14:22] Jupiter 8-hop route","[14:19] Kamino APY 5.8%","[14:15] Jito MEV +0.003 SOL","[14:08] Streamflow #4421","[14:01] Portfolio: $4,218","[13:55] SOL→USDC OK","[14:22] Jupiter 8-hop route","[14:19] Kamino APY 5.8%"].map((ln,i) => (
-                    <p key={i} style={{ margin:0, fontFamily:"'Space Grotesk',sans-serif", fontSize:".41rem", letterSpacing:".07em", color:"rgba(255,185,60,.3)", lineHeight:1.44 }}>{ln}</p>
+                    <p key={i} style={{ margin:0, fontFamily:"'Space Grotesk',sans-serif", fontSize:".41rem",
+                      letterSpacing:".07em", color:"rgba(255,255,255,.18)", lineHeight:1.44 }}>{ln}</p>
                   ))}
                 </div>
               </div>
@@ -590,7 +589,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* ══ RIGHT HUD */}
+        {/* ══ RIGHT HUD ═════════════════════════════════════════════════════ */}
         <div ref={rHudRef} className="a1" style={{ position:"fixed", right:"1.15rem", top:"50%", zIndex:20, willChange:"transform" }}>
           <div className="glass" style={{ padding:"1.25rem 1.05rem", minWidth:138, display:"flex", flexDirection:"column", gap:"1.15rem", alignItems:"flex-end" }}>
             <div className="glass-top" />
@@ -599,8 +598,8 @@ export default function LandingPage() {
               <div style={{ display:"flex", alignItems:"flex-end", gap:3, justifyContent:"flex-end", marginTop:6 }}>
                 {[7,11,16,20,15].map((h,i) => (
                   <div key={i} style={{ width:5, height:h, borderRadius:2,
-                    background: i<4 ? "rgba(255,185,60,.88)" : "rgba(255,185,60,.16)",
-                    boxShadow: i<4 ? "0 0 5px rgba(245,158,11,.52)" : "none" }} />
+                    background: i<4 ? "rgba(245,158,11,.85)" : "rgba(245,158,11,.14)",
+                    boxShadow: i<4 ? "0 0 5px rgba(245,158,11,.45)" : "none" }} />
                 ))}
               </div>
             </div>
@@ -608,15 +607,16 @@ export default function LandingPage() {
               <div key={l} style={{ textAlign:"right" }}><span className="hl">{l}</span><span className="hv">{v}</span></div>
             ))}
             <div style={{ display:"flex", alignItems:"center", gap:7 }}>
-              <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".42rem", letterSpacing:".22em", textTransform:"uppercase", color:"rgba(255,185,60,.34)" }}>LIVE</span>
-              <span style={{ width:7, height:7, borderRadius:"50%", background:"#FFC060",
-                boxShadow:"0 0 9px rgba(255,185,60,1),0 0 20px rgba(245,158,11,.5)", display:"inline-block", animation:"blink 2.9s ease-in-out infinite" }} />
+              <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".42rem", letterSpacing:".22em",
+                textTransform:"uppercase", color:"rgba(255,255,255,.2)" }}>LIVE</span>
+              <span style={{ width:7, height:7, borderRadius:"50%", background:"#F59E0B",
+                boxShadow:"0 0 9px rgba(245,158,11,1),0 0 20px rgba(245,158,11,.45)", display:"inline-block", animation:"blink 2.9s ease-in-out infinite" }} />
             </div>
             <div className="glass-bot" />
           </div>
         </div>
 
-        {/* ══ HERO */}
+        {/* ══ HERO ══════════════════════════════════════════════════════════ */}
         <div style={{
           position:"absolute", inset:0, zIndex:16,
           display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
@@ -626,27 +626,27 @@ export default function LandingPage() {
           <div ref={heroTextRef} style={{ textAlign:"center", willChange:"transform", transformStyle:"preserve-3d", zIndex:2, marginBottom:"1rem" }}>
             <div className="a0" style={{
               display:"inline-flex", alignItems:"center", gap:9, padding:".36rem .95rem",
-              background:"linear-gradient(135deg,rgba(255,255,255,.055),rgba(255,185,55,.02))",
+              background:"rgba(255,255,255,.05)",
               backdropFilter:"blur(14px)", WebkitBackdropFilter:"blur(14px)",
-              border:"1px solid rgba(255,185,60,.15)", borderTop:"1px solid rgba(255,255,255,.11)",
-              borderRadius:10, marginBottom:"1.1rem",
-              boxShadow:"inset 0 1px 0 rgba(255,255,255,.06),0 4px 20px rgba(0,0,0,.44),0 0 20px rgba(245,158,11,.06)",
+              border:"1px solid rgba(255,255,255,.08)",
+              borderRadius:8, marginBottom:"1.1rem",
+              boxShadow:"inset 0 1px 0 rgba(255,255,255,.05),0 4px 20px rgba(0,0,0,.44)",
             }}>
-              <span style={{ width:5, height:5, borderRadius:"50%", background:"#66FF99",
-                boxShadow:"0 0 7px rgba(80,255,130,.95)", display:"inline-block", animation:"blink 2s ease-in-out infinite" }} />
+              <span style={{ width:5, height:5, borderRadius:"50%", background:"#22C55E",
+                boxShadow:"0 0 7px rgba(34,197,94,.95)", display:"inline-block", animation:"blink 2s ease-in-out infinite" }} />
               <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".46rem", fontWeight:600,
-                letterSpacing:".33em", textTransform:"uppercase", color:"rgba(255,235,185,.44)" }}>
+                letterSpacing:".33em", textTransform:"uppercase", color:"rgba(255,255,255,.3)" }}>
                 SYSTEM STATUS: CONVERGENCE DETECTED
               </span>
-              <span style={{ width:5, height:5, borderRadius:"50%", background:"#66FF99",
-                boxShadow:"0 0 7px rgba(80,255,130,.95)", display:"inline-block", animation:"blink 2s ease-in-out .85s infinite" }} />
+              <span style={{ width:5, height:5, borderRadius:"50%", background:"#22C55E",
+                boxShadow:"0 0 7px rgba(34,197,94,.95)", display:"inline-block", animation:"blink 2s ease-in-out .85s infinite" }} />
             </div>
 
             <h1 className="a1" style={{
               fontFamily:"'Noto Serif',serif", fontWeight:400, lineHeight:.86,
               letterSpacing:"-.025em", margin:0, userSelect:"none",
               fontSize:"clamp(4.6rem,12.5vw,9.8rem)",
-              background:"linear-gradient(155deg,#FFE988 0%,#FFD060 13%,#F5A814 44%,#F59E0B 60%,#D87706 82%,#FFD060 100%)",
+              background:"linear-gradient(155deg,#FCD34D 0%,#F59E0B 44%,#D97706 80%,#92400E 100%)",
               WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text",
               animation:"glowPulse 4.8s ease-in-out infinite",
             }}>
@@ -656,94 +656,60 @@ export default function LandingPage() {
             <p className="a2" style={{
               fontFamily:"'Noto Serif',serif", fontStyle:"italic",
               fontSize:"clamp(.7rem,1.35vw,.92rem)", letterSpacing:".24em",
-              color:"rgba(188,218,255,.4)", marginTop:".8rem",
+              color:"rgba(148,163,184,.35)", marginTop:".8rem",
               textShadow:"0 2px 16px rgba(0,0,0,.95)",
             }}>Sanctum of the Eternal Gate</p>
           </div>
 
           {/* ── PORTAL IMAGE ── */}
           <div className="a2" style={{ position:"relative", zIndex:1, marginBottom:"1.1rem" }}>
-
-            {/* Far back glow haze */}
             <div style={{
               position:"absolute", top:"5%", left:"50%", transform:"translateX(-50%)",
               width:"160%", height:"80%",
-              background:"radial-gradient(ellipse,rgba(255,120,15,.3) 0%,rgba(245,95,5,.1) 44%,transparent 70%)",
+              background:"radial-gradient(ellipse,rgba(245,130,15,.25) 0%,rgba(245,95,5,.08) 44%,transparent 70%)",
               filter:"blur(70px)", pointerEvents:"none", zIndex:0,
             }} />
 
-            {/* 3D parallax wrapper */}
             <div ref={portalRef} style={{ position:"relative", willChange:"transform", transformStyle:"preserve-3d" }}>
-
-              {/* ── PORTAL IMAGE with 12px radius + strong orange back-shadow ── */}
-              <div className="portal-box" style={{
-                width:"clamp(240px,30vw,400px)",
-                aspectRatio:"3/4",
-              }}>
-                {/* Extra behind-glow layer — sits outside via negative margin trick using z-index */}
+              <div className="portal-box" style={{ width:"clamp(240px,30vw,400px)", aspectRatio:"3/4" }}>
                 <div style={{
-                  position:"absolute", inset:"-18px",
-                  borderRadius:24,
-                  background:"transparent",
-                  boxShadow:`
-                    0 0 50px 12px rgba(255,140,10,.65),
-                    0 0 120px 30px rgba(245,100,5,.42),
-                    0 0 240px 60px rgba(220,75,5,.22),
-                    0 0 400px 100px rgba(180,50,0,.12)
-                  `,
+                  position:"absolute", inset:"-18px", borderRadius:24, background:"transparent",
+                  boxShadow:"0 0 50px 12px rgba(245,140,10,.6),0 0 120px 30px rgba(245,100,5,.38),0 0 240px 60px rgba(220,75,5,.18),0 0 400px 100px rgba(180,50,0,.1)",
                   pointerEvents:"none", zIndex:-1,
                 }} />
-
-                <img
-                  src={GATE_IMG}
-                  alt="The Eternal Gate"
+                <img src={GATE_IMG} alt="The Eternal Gate"
                   onLoad={() => setImgLoaded(true)}
                   style={{
                     width:"100%", height:"100%", objectFit:"cover", objectPosition:"center 18%",
-                    filter:"brightness(1.14) contrast(1.09) saturate(1.18)",
-                    display:"block",
-                    opacity: imgLoaded ? 1 : 0,
-                    transition:"opacity .9s ease",
-                    borderRadius:12,
-                  }}
-                />
-                {/* Inner radial vignette */}
+                    filter:"brightness(1.12) contrast(1.08) saturate(1.15)",
+                    display:"block", opacity: imgLoaded ? 1 : 0, transition:"opacity .9s ease", borderRadius:12,
+                  }} />
                 <div style={{ position:"absolute", inset:0, pointerEvents:"none", borderRadius:12,
-                  background:"radial-gradient(ellipse 58% 52% at 50% 38%,transparent 0%,transparent 32%,rgba(3,1,0,.52) 78%,rgba(2,1,0,.84) 100%)" }} />
-                {/* Bottom fire blend */}
+                  background:"radial-gradient(ellipse 58% 52% at 50% 38%,transparent 0%,transparent 32%,rgba(5,5,8,.5) 78%,rgba(4,4,7,.84) 100%)" }} />
                 <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"44%", pointerEvents:"none",
-                  background:"linear-gradient(0deg,rgba(3,1,0,.97) 0%,rgba(6,2,0,.58) 40%,transparent 100%)",
+                  background:"linear-gradient(0deg,rgba(9,9,11,.97) 0%,rgba(9,9,11,.55) 40%,transparent 100%)",
                   borderRadius:"0 0 12px 12px" }} />
-                {/* Top overlay */}
                 <div style={{ position:"absolute", top:0, left:0, right:0, height:"18%", pointerEvents:"none",
-                  background:"linear-gradient(180deg,rgba(3,1,0,.68) 0%,transparent 100%)",
+                  background:"linear-gradient(180deg,rgba(9,9,11,.65) 0%,transparent 100%)",
                   borderRadius:"12px 12px 0 0" }} />
-                {/* Amber screen */}
-                <div style={{ position:"absolute", inset:0, pointerEvents:"none", borderRadius:12,
-                  background:"radial-gradient(ellipse 52% 38% at 50% 52%,rgba(255,130,10,.07) 0%,transparent 68%)",
-                  mixBlendMode:"screen" }} />
-                {/* Loading skeleton */}
                 {!imgLoaded && (
                   <div style={{ position:"absolute", inset:0, borderRadius:12,
-                    background:"linear-gradient(135deg,#0d0800,#1a100a,#0d0800)",
+                    background:"linear-gradient(135deg,#0d0d10,#1a1a20,#0d0d10)",
                     display:"flex", alignItems:"center", justifyContent:"center" }}>
                     <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".44rem", letterSpacing:".22em",
-                      textTransform:"uppercase", color:"rgba(255,185,60,.28)", animation:"blink 1.4s ease-in-out infinite" }}>
+                      textTransform:"uppercase", color:"rgba(245,158,11,.25)", animation:"blink 1.4s ease-in-out infinite" }}>
                       LOADING GATE...
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* Fire erupting from portal base */}
-              <div style={{
-                position:"absolute", bottom:-18, left:"50%", transform:"translateX(-50%)",
-                width:"clamp(240px,30vw,400px)", height:110,
-                pointerEvents:"none", zIndex:5,
-              }}>
+              {/* Fire canvas */}
+              <div style={{ position:"absolute", bottom:-18, left:"50%", transform:"translateX(-50%)",
+                width:"clamp(240px,30vw,400px)", height:110, pointerEvents:"none", zIndex:5 }}>
                 <canvas ref={fireRef} style={{
                   width:"100%", height:"100%", imageRendering:"pixelated",
-                  opacity:.8, mixBlendMode:"screen",
+                  opacity:.75, mixBlendMode:"screen",
                   maskImage:"radial-gradient(ellipse 62% 82% at 50% 82%,black 0%,black 28%,transparent 74%)",
                   WebkitMaskImage:"radial-gradient(ellipse 62% 82% at 50% 82%,black 0%,black 28%,transparent 74%)",
                 }} />
@@ -751,54 +717,108 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* CTAs */}
-          <div className="a3" style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:".9rem", zIndex:2 }}>
-            <button className="btn-cta" style={{ padding:"1.05rem 3.4rem" }} onClick={() => setVisible(true)}>
-              <span className="btn-shine" />
-              <span className="ms" style={{ fontSize:16 }}>account_balance_wallet</span>
-              CONNECT WALLET
-            </button>
-            <button className="btn-ghost" onClick={() => router.push("/chat")}>ENTER VIA GUEST PROTOCOL</button>
-          </div>
+          {/* ── FIX #3: CTAs differ based on wallet state ── */}
+          {connected && publicKey ? (
+            /* Connected state — show useful panel instead of connect button */
+            <div className="a3 connected-card" style={{ padding:"20px 24px", width:"clamp(320px,36vw,460px)", zIndex:2 }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                  <div style={{ width:7, height:7, borderRadius:"50%", background:"#F59E0B",
+                    boxShadow:"0 0 7px rgba(245,158,11,.8)" }} />
+                  <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".52rem", fontWeight:600,
+                    letterSpacing:".2em", textTransform:"uppercase", color:"rgba(245,158,11,.7)" }}>WALLET CONNECTED</span>
+                </div>
+                <button onClick={() => disconnect()} style={{ background:"none", border:"none", cursor:"pointer",
+                  fontFamily:"'Space Grotesk',sans-serif", fontSize:".46rem", fontWeight:500,
+                  letterSpacing:".14em", textTransform:"uppercase", color:"rgba(255,255,255,.2)",
+                  transition:"color .15s" }}
+                  onMouseEnter={e=>(e.currentTarget.style.color="rgba(248,113,113,.7)")}
+                  onMouseLeave={e=>(e.currentTarget.style.color="rgba(255,255,255,.2)")}>
+                  DISCONNECT
+                </button>
+              </div>
+              <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".56rem", color:"rgba(245,158,11,.4)",
+                letterSpacing:".06em", wordBreak:"break-all", marginBottom:16, fontWeight:500 }}>
+                {publicKey.toString().slice(0,20)}…{publicKey.toString().slice(-8)}
+              </p>
+              <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:16 }}>
+                {[
+                  { icon:"psychology",            label:"Oracle Command",      sub:"Open the AI chat interface",        action:() => router.push("/chat") },
+                  { icon:"account_balance_wallet", label:"Check Portfolio",     sub:"View balances & positions",         action:() => router.push("/chat") },
+                  { icon:"swap_horiz",             label:"Swap Tokens",          sub:"Best price via Jupiter",            action:() => router.push("/chat") },
+                  { icon:"bolt",                   label:"Stake SOL",            sub:"~8% APY with Jito liquid staking",  action:() => router.push("/chat") },
+                ].map(({ icon, label, sub, action }) => (
+                  <button key={label} className="action-row" onClick={action}>
+                    <span className="ms" style={{ fontSize:16, color:"rgba(245,158,11,.6)", flexShrink:0 }}>{icon}</span>
+                    <div style={{ textAlign:"left" }}>
+                      <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".66rem", fontWeight:600,
+                        color:"rgba(255,255,255,.85)", margin:0, letterSpacing:".02em" }}>{label}</p>
+                      <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".56rem", color:"rgba(255,255,255,.25)",
+                        margin:"1px 0 0", lineHeight:1.4 }}>{sub}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <button className="btn-cta" style={{ width:"100%", padding:"1rem 0", fontSize:".65rem", letterSpacing:".22em" }}
+                onClick={() => router.push("/chat")}>
+                <span className="btn-shine" />
+                <span className="ms" style={{ fontSize:16 }}>psychology</span>
+                ENTER ORACLE COMMAND
+              </button>
+            </div>
+          ) : (
+            /* Disconnected state — standard connect CTAs */
+            <div className="a3" style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:".9rem", zIndex:2 }}>
+              <button className="btn-cta" style={{ padding:"1.05rem 3.4rem" }} onClick={() => setVisible(true)}>
+                <span className="btn-shine" />
+                <span className="ms" style={{ fontSize:16 }}>account_balance_wallet</span>
+                CONNECT WALLET
+              </button>
+              <button className="btn-ghost" onClick={() => router.push("/chat")}>ENTER VIA GUEST PROTOCOL</button>
+            </div>
+          )}
 
           {/* Protocol cards */}
-          <div className="a4" style={{ display:"flex", gap:6, marginTop:"1.3rem", flexWrap:"wrap", justifyContent:"center", maxWidth:540, zIndex:2 }}>
-            {[
-              { p:"JUPITER",    d:"Best-route swaps",  icon:"swap_horiz",  apy:null    },
-              { p:"KAMINO",     d:"Yield deposits",     icon:"trending_up", apy:"5.8%" },
-              { p:"JITO",       d:"Liquid staking",     icon:"bolt",        apy:"8.2%" },
-              { p:"STREAMFLOW", d:"Recurring payments", icon:"stream",      apy:null    },
-            ].map(({ p,d,icon,apy }) => (
-              <div key={p} className="proto">
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                  <span className="ms" style={{ fontSize:13, color:"rgba(255,185,60,.65)",
-                    fontVariationSettings:"'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 20" }}>{icon}</span>
-                  <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".44rem", fontWeight:700,
-                    letterSpacing:".19em", textTransform:"uppercase", color:"rgba(255,185,60,.68)" }}>{p}</span>
-                </div>
-                <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".53rem", color:"rgba(229,226,225,.3)", lineHeight:1.4, margin:0 }}>{d}</p>
-                {apy && <span style={{ fontFamily:"'Noto Serif',serif", fontSize:".64rem", color:"rgba(255,185,60,.8)", fontWeight:700 }}>{apy} APY</span>}
+          {!connected && (
+            <>
+              <div className="a4" style={{ display:"flex", gap:6, marginTop:"1.3rem", flexWrap:"wrap", justifyContent:"center", maxWidth:540, zIndex:2 }}>
+                {[
+                  { p:"JUPITER",    d:"Best-route swaps",  icon:"swap_horiz",  apy:null    },
+                  { p:"KAMINO",     d:"Yield deposits",     icon:"trending_up", apy:"5.8%" },
+                  { p:"JITO",       d:"Liquid staking",     icon:"bolt",        apy:"8.2%" },
+                  { p:"STREAMFLOW", d:"Recurring payments", icon:"stream",      apy:null    },
+                ].map(({ p,d,icon,apy }) => (
+                  <div key={p} className="proto">
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <span className="ms" style={{ fontSize:13, color:"rgba(245,158,11,.6)",
+                        fontVariationSettings:"'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 20" }}>{icon}</span>
+                      <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".44rem", fontWeight:700,
+                        letterSpacing:".19em", textTransform:"uppercase", color:"rgba(245,158,11,.65)" }}>{p}</span>
+                    </div>
+                    <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".53rem", color:"rgba(255,255,255,.22)", lineHeight:1.4, margin:0 }}>{d}</p>
+                    {apy && <span style={{ fontFamily:"'Noto Serif',serif", fontSize:".64rem", color:"rgba(245,158,11,.75)", fontWeight:700 }}>{apy} APY</span>}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {/* Stats */}
-          <div className="a4" style={{ display:"flex", gap:6, marginTop:".9rem", flexWrap:"wrap", justifyContent:"center", zIndex:2 }}>
-            {[{ l:"PROTOCOLS",v:"4" },{ l:"NETWORK",v:"SOLANA" },{ l:"SPEED",v:"< 1s" },{ l:"TVL",v:"$4.2M" }].map(({ l,v }) => (
-              <div key={l} className="stat-pill">
-                <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".41rem", letterSpacing:".2em", textTransform:"uppercase", color:"rgba(255,210,130,.24)" }}>{l}</span>
-                <span style={{ fontFamily:"'Noto Serif',serif", fontSize:".9rem", fontWeight:700, color:"rgba(255,188,62,.86)", textShadow:"0 0 11px rgba(245,158,11,.44)" }}>{v}</span>
+              <div className="a4" style={{ display:"flex", gap:6, marginTop:".9rem", flexWrap:"wrap", justifyContent:"center", zIndex:2 }}>
+                {[{ l:"PROTOCOLS",v:"4" },{ l:"NETWORK",v:"SOLANA" },{ l:"SPEED",v:"< 1s" },{ l:"TVL",v:"$4.2M" }].map(({ l,v }) => (
+                  <div key={l} className="stat-pill">
+                    <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".41rem", letterSpacing:".2em", textTransform:"uppercase", color:"rgba(255,255,255,.18)" }}>{l}</span>
+                    <span style={{ fontFamily:"'Noto Serif',serif", fontSize:".9rem", fontWeight:700, color:"rgba(245,158,11,.82)", textShadow:"0 0 11px rgba(245,158,11,.4)" }}>{v}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
 
           <p className="a5" style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".41rem", letterSpacing:".14em",
-            textTransform:"uppercase", color:"rgba(255,215,150,.14)", marginTop:"1rem", zIndex:2 }}>
+            textTransform:"uppercase", color:"rgba(255,255,255,.1)", marginTop:"1rem", zIndex:2 }}>
             DOMINUS NEVER EXECUTES WITHOUT YOUR EXPLICIT CONFIRMATION
           </p>
         </div>
 
-        {/* ══ STATUS BAR */}
+        {/* ══ STATUS BAR ════════════════════════════════════════════════════ */}
         <div className="sb-glass" style={{
           position:"fixed", bottom:0, left:0, right:0, zIndex:50,
           height:38, display:"flex", alignItems:"center", justifyContent:"space-between",
@@ -806,24 +826,24 @@ export default function LandingPage() {
         }}>
           <div style={{ display:"flex", alignItems:"center", gap:".82rem" }}>
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-              <span style={{ width:6, height:6, borderRadius:"50%", background:"#FFC060",
-                boxShadow:"0 0 8px rgba(255,185,60,1),0 0 18px rgba(245,158,11,.46)", display:"inline-block",
+              <span style={{ width:6, height:6, borderRadius:"50%", background:"#F59E0B",
+                boxShadow:"0 0 8px rgba(245,158,11,1),0 0 18px rgba(245,158,11,.4)", display:"inline-block",
                 animation:"blink 2.9s ease-in-out infinite" }} />
               <span className="sb">CORE PRIME CONNECTED</span>
             </div>
-            <div style={{ width:1, height:11, background:"rgba(255,180,50,.13)" }} />
-            <span className="sb">EPOCH: <strong style={{ color:"rgba(255,185,60,.7)", fontWeight:700 }}>{epoch.toFixed(2)}.ALPHA</strong></span>
-            <div style={{ width:1, height:11, background:"rgba(255,180,50,.13)" }} />
-            <span className="sb">LATENCY: <strong style={{ color:"rgba(100,255,155,.54)", fontWeight:700 }}>{latency}ms</strong></span>
+            <div style={{ width:1, height:11, background:"rgba(255,255,255,.08)" }} />
+            <span className="sb">EPOCH: <strong style={{ color:"rgba(245,158,11,.65)", fontWeight:700 }}>{epoch.toFixed(2)}.ALPHA</strong></span>
+            <div style={{ width:1, height:11, background:"rgba(255,255,255,.08)" }} />
+            <span className="sb">LATENCY: <strong style={{ color:"rgba(34,197,94,.5)", fontWeight:700 }}>{latency}ms</strong></span>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:".82rem" }}>
-            <span className="sb" style={{ color:"rgba(255,215,140,.21)" }}>{network}</span>
-            <div style={{ width:1, height:11, background:"rgba(255,180,50,.13)" }} />
+            <span className="sb" style={{ color:"rgba(255,255,255,.15)" }}>{network}</span>
+            <div style={{ width:1, height:11, background:"rgba(255,255,255,.08)" }} />
             <div style={{ display:"flex", gap:3, alignItems:"center" }}>
               {[24,10,17].map((w,i) => (
                 <div key={i} style={{ width:w, height:2, borderRadius:1,
-                  background: i!==1 ? "rgba(255,185,60,.65)" : "rgba(255,185,60,.17)",
-                  boxShadow: i!==1 ? "0 0 4px rgba(245,158,11,.44)" : "none" }} />
+                  background: i!==1 ? "rgba(245,158,11,.6)" : "rgba(245,158,11,.14)",
+                  boxShadow: i!==1 ? "0 0 4px rgba(245,158,11,.4)" : "none" }} />
               ))}
             </div>
             <span className="sb">V2.4.9-SECURE</span>
