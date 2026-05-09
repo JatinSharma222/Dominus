@@ -617,13 +617,14 @@ export default function LandingPage() {
         </div>
 
         {/* ══ HERO ══════════════════════════════════════════════════════════ */}
-        <div style={{
-          position:"absolute", inset:0, zIndex:16,
-          display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-          paddingTop:60, paddingBottom:38,
-        }}>
+      <div style={{
+        position:"absolute", inset:0, zIndex:16,
+        display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"flex-start",
+        paddingTop:72, paddingBottom:48,
+        overflowY:"auto",
+      }}>
           {/* Wordmark block */}
-          <div ref={heroTextRef} style={{ textAlign:"center", willChange:"transform", transformStyle:"preserve-3d", zIndex:2, marginBottom:"1rem" }}>
+          <div ref={heroTextRef} style={{ textAlign:"center", willChange:"transform", transformStyle:"preserve-3d", zIndex:2, marginBottom:".65rem" }}>
             <div className="a0" style={{
               display:"inline-flex", alignItems:"center", gap:9, padding:".36rem .95rem",
               background:"rgba(255,255,255,.05)",
@@ -671,7 +672,7 @@ export default function LandingPage() {
             }} />
 
             <div ref={portalRef} style={{ position:"relative", willChange:"transform", transformStyle:"preserve-3d" }}>
-              <div className="portal-box" style={{ width:"clamp(240px,30vw,400px)", aspectRatio:"3/4" }}>
+              <div className="portal-box" style={{  width:"clamp(220px,25vw,360px)", aspectRatio:"3/4" }}>
                 <div style={{
                   position:"absolute", inset:"-18px", borderRadius:24, background:"transparent",
                   boxShadow:"0 0 50px 12px rgba(245,140,10,.6),0 0 120px 30px rgba(245,100,5,.38),0 0 240px 60px rgba(220,75,5,.18),0 0 400px 100px rgba(180,50,0,.1)",

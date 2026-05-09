@@ -63,9 +63,14 @@ export default function JitoStakeCard({ intent, onSuccess, onCancel }: JitoStake
   const [txid,     setTxid]     = useState<string | null>(null)
   const [txError,  setTxError]  = useState<string | null>(null)
 
-  const daily   = apyData ? (intent.amount * apyData.apy) / 100 / 365 : 0
+  // FIX: coerce to Number — intent.amount arrives as string through Ollama JSON
+  // annotation stream even though the Zod schema declares it as number.
+  // String.prototype.toFixed does not exist → runtime crash without this coercion.
+  const amount = Number(intent.amount)
+
+  const daily   = apyData ? (amount * apyData.apy) / 100 / 365 : 0
   const monthly = daily * 30
-  const yearly  = apyData ? (intent.amount * apyData.apy) / 100 : 0
+  const yearly  = apyData ? (amount * apyData.apy) / 100 : 0
 
   useEffect(() => {
     let cancelled = false
@@ -89,7 +94,7 @@ export default function JitoStakeCard({ intent, onSuccess, onCancel }: JitoStake
       setStatus("building")
       const res = await fetch("/api/jito/stake", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: intent.amount, walletAddress: publicKey.toString(), stakePoolAddress: intent.stakePoolAddress }),
+        body: JSON.stringify({ amount, walletAddress: publicKey.toString(), stakePoolAddress: intent.stakePoolAddress }),
       })
       if (!res.ok) {
         const b = await res.json().catch(() => ({ error: res.statusText }))
@@ -176,7 +181,8 @@ export default function JitoStakeCard({ intent, onSuccess, onCancel }: JitoStake
               padding:"14px", background:"rgba(0,0,0,.25)", borderRadius:8, border:"1px solid rgba(255,255,255,.06)" }}>
               <div>
                 <p style={labelXs}>YOU STAKE</p>
-                <p style={heroNum}>{intent.amount}</p>
+                {/* FIX: use coerced `amount` (Number) — not raw intent.amount (may be string) */}
+                <p style={heroNum}>{amount}</p>
                 <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".62rem", fontWeight:700,
                   letterSpacing:".1em", color:"rgba(245,158,11,.8)" }}>SOL</span>
               </div>
@@ -189,7 +195,8 @@ export default function JitoStakeCard({ intent, onSuccess, onCancel }: JitoStake
               </div>
               <div style={{ textAlign:"right" }}>
                 <p style={labelXs}>YOU RECEIVE</p>
-                <p style={heroNum}>≈ {intent.amount.toFixed(4)}</p>
+                {/* FIX: amount is now a Number so .toFixed() works */}
+                <p style={heroNum}>≈ {amount.toFixed(4)}</p>
                 <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".62rem", fontWeight:700,
                   letterSpacing:".1em", color:"rgba(129,140,248,.85)" }}>jitoSOL</span>
               </div>
