@@ -5,11 +5,9 @@ import { useWallet } from "@solana/wallet-adapter-react"
 import { useWalletModal } from "@solana/wallet-adapter-react-ui"
 import { useRouter } from "next/navigation"
 
-const GATE_IMG =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuD0DyECvfMshIBB_dQU2p7bwdv_6ciBkR_fClpDFWWyuX3T3LrbaOwAuFm9R-DYe0yvgKJsCHZrHbjdbyVku3ne6V7justI9SrkT88q4MMJXwVHLGqoyaCqUAKIiYDtQAFc9kfWsgNfN3baZDZ00gvgTbjEPke_NBcSxl-Y5yw9FCEoKk7y3EQ_FeIAMBCVHJNuOTfK0tQ5kWy26klZjWFr5n2fv_SGMcQSFse2FjSvnWHZRTAU8P47wGGv0NrgzLd5PPtp007K4f2G"
-
-const AETHER_IMG =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuA8O-jxGq9p6pB2fhiscu4C-DTKs4C09K8meX9zguYmeMrhNe6q4QM7dv5QfDXGYL6uAgpBKmN5Q2tGcJlPM1OkJlkQuWjeWiqkoq2pGJLrSy6daejDBvONTDqOdDuCtB8yp73cQFNewH5t4Rz-5l6N9L8864wZTLKGb8MC5nNSnfwqh4xDTrnheF1zQE5gaeZ4B-jYEVJh0lgNIbtHmXSvZFtMgQ1z3pmXqf7-8swJqWCH5CePQ1A2sfZV_EMt13kNd1Uq2KdYqqZk"
+// ── Local images — make sure these exist in /public/images/ ──
+const GATE_IMG   = "/images/gate-bg.jpg"
+const AETHER_IMG = "/images/aether-avatar.jpg"
 
 function buildFirePalette(): Uint32Array {
   const p = new Uint32Array(256)
@@ -41,7 +39,7 @@ export default function LandingPage() {
   const fireRef     = useRef<HTMLCanvasElement>(null)
   const particleRef = useRef<HTMLCanvasElement>(null)
   const auroraRef   = useRef<HTMLCanvasElement>(null)
-  const portalRef   = useRef<HTMLDivElement>(null)
+  const gateImgRef  = useRef<HTMLDivElement>(null)   // replaces portalRef
   const heroTextRef = useRef<HTMLDivElement>(null)
   const lHudRef     = useRef<HTMLDivElement>(null)
   const rHudRef     = useRef<HTMLDivElement>(null)
@@ -49,8 +47,6 @@ export default function LandingPage() {
   const rafRef      = useRef<number>(0)
 
   useEffect(() => { setMounted(true) }, [])
-
-  // ── FIX #3: NO redirect when connected. We show a connected state instead. ──
 
   useEffect(() => {
     const e = setInterval(() => setEpoch(p => parseFloat((p + 0.01).toFixed(2))), 90)
@@ -72,10 +68,12 @@ export default function LandingPage() {
       const m = mouse.current
       m.x += (m.tx - m.x) * 0.04
       m.y += (m.ty - m.y) * 0.04
-      if (portalRef.current)
-        portalRef.current.style.transform = `perspective(1800px) rotateX(${m.y * -7}deg) rotateY(${m.x * 7}deg) translateZ(0)`
+      // Gate image: very subtle parallax so the full-screen bg shifts gently
+      if (gateImgRef.current)
+        gateImgRef.current.style.transform = `scale(1.06) translate(${m.x * -12}px, ${m.y * -8}px)`
+      // Hero wordmark: gentle tilt
       if (heroTextRef.current)
-        heroTextRef.current.style.transform = `perspective(1800px) rotateX(${m.y * -3}deg) rotateY(${m.x * 3}deg)`
+        heroTextRef.current.style.transform = `perspective(1800px) rotateX(${m.y * -2.5}deg) rotateY(${m.x * 2.5}deg)`
       if (lHudRef.current)
         lHudRef.current.style.transform = `translateY(-50%) translate(${m.x * 9}px,${m.y * 6}px)`
       if (rHudRef.current)
@@ -232,38 +230,122 @@ export default function LandingPage() {
     const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight }
     resize()
     window.addEventListener("resize", resize, { passive: true })
-    type P = { x:number;y:number;vx:number;vy:number;r:number;op:number;life:number;maxLife:number;ember:boolean }
-    const pts: P[] = Array.from({ length: 90 }, (_, i) => {
-      const ember = i < 55
-      return { x:0,y:0, vx:(Math.random()-0.5)*(ember?0.9:0.3), vy:ember?-(Math.random()*1.8+0.5):(Math.random()-0.5)*0.2,
-        r:Math.random()*(ember?2.2:1.3)+0.4, op:Math.random()*0.7+0.15, life:Math.random()*160, maxLife:130+Math.random()*130, ember }
-    })
+
+    type P = {
+      x:number; y:number; vx:number; vy:number; r:number
+      op:number; life:number; maxLife:number
+      type:"ember"|"dust"|"spark"|"ring"
+      ringR?:number; ringMaxR?:number; ringAlpha?:number
+    }
+
+    const makeParticle = (i:number): P => {
+      const roll = Math.random()
+      if (roll < 0.04) {
+        // Expanding ring bursts — rare, dramatic
+        return { x:0,y:0,vx:0,vy:0,r:0,op:0,life:0,maxLife:1,
+          type:"ring", ringR:0, ringMaxR:60+Math.random()*120, ringAlpha:0.6 }
+      }
+      if (roll < 0.35) {
+        // Sparks — fast, bright, short-lived
+        const angle = Math.random()*Math.PI*2
+        const spd = 0.8+Math.random()*2.2
+        return { x:0,y:0, vx:Math.cos(angle)*spd, vy:Math.sin(angle)*spd-(Math.random()*1.5),
+          r:Math.random()*1.4+0.4, op:0.9+Math.random()*0.1,
+          life:Math.random()*40, maxLife:40+Math.random()*60, type:"spark" }
+      }
+      if (roll < 0.65) {
+        // Embers — rise upward
+        return { x:0,y:0, vx:(Math.random()-0.5)*0.9, vy:-(Math.random()*1.8+0.4),
+          r:Math.random()*2.4+0.5, op:Math.random()*0.7+0.25,
+          life:Math.random()*160, maxLife:120+Math.random()*140, type:"ember" }
+      }
+      // Dust — large, slow, atmospheric
+      return { x:0,y:0, vx:(Math.random()-0.5)*0.22, vy:(Math.random()-0.5)*0.12,
+        r:Math.random()*3.5+1.2, op:Math.random()*0.18+0.04,
+        life:Math.random()*200, maxLife:200+Math.random()*200, type:"dust" }
+    }
+
+    const pts: P[] = Array.from({ length: 160 }, (_, i) => makeParticle(i))
+
     let raf: number
     const draw = () => {
       ctx.clearRect(0,0,canvas.width,canvas.height)
-      const cx=canvas.width*0.5, cy=canvas.height*0.5
+      const cx=canvas.width*0.5, cy=canvas.height*0.48   // slightly above center (gate portal)
       const mx=mouse.current.x, my=mouse.current.y
-      pts.forEach(p => {
-        if (p.life===0||p.life>p.maxLife){
-          p.x=cx+(Math.random()-0.5)*(p.ember?200:480)
-          p.y=cy+(p.ember?80+Math.random()*100:(Math.random()-0.5)*280)
-          p.life=0
+
+      pts.forEach((p, idx) => {
+        // Respawn dead particles
+        if (p.life===0 || p.life>p.maxLife) {
+          const fresh = makeParticle(idx)
+          if (fresh.type==="ring") {
+            fresh.x = cx+(Math.random()-0.5)*280
+            fresh.y = cy+(Math.random()-0.5)*180
+          } else if (fresh.type==="spark") {
+            fresh.x = cx+(Math.random()-0.5)*160
+            fresh.y = cy+20+Math.random()*80
+          } else if (fresh.type==="ember") {
+            fresh.x = cx+(Math.random()-0.5)*320
+            fresh.y = cy+60+Math.random()*120
+          } else {
+            fresh.x = cx+(Math.random()-0.5)*600
+            fresh.y = cy+(Math.random()-0.5)*340
+          }
+          Object.assign(p, fresh)
+          p.life = 1
+          return
         }
         p.life++
-        const frac=p.life/p.maxLife
-        const fade=frac<0.15?frac/0.15:frac>0.75?1-(frac-0.75)/0.25:1
-        const al=p.op*fade
-        p.x+=p.vx+mx*0.007+(Math.random()-0.5)*0.14
-        p.y+=p.vy+my*0.005
-        if(p.ember&&p.r>1.2){
-          const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*5)
-          g.addColorStop(0,`rgba(255,200,60,${al*0.5})`); g.addColorStop(1,"transparent")
-          ctx.beginPath(); ctx.arc(p.x,p.y,p.r*5,0,Math.PI*2); ctx.fillStyle=g; ctx.fill()
+
+        if (p.type==="ring") {
+          // Expanding ring burst
+          const rr = p.ringR ?? 0
+          const rm = p.ringMaxR ?? 80
+          p.ringR = rr + (rm * 0.035)
+          const frac = (p.ringR ?? 0) / rm
+          const al  = (p.ringAlpha ?? 0.5) * (1 - frac) * (frac < 0.2 ? frac/0.2 : 1)
+          if (al > 0.005) {
+            ctx.beginPath()
+            ctx.arc(p.x, p.y, p.ringR ?? 0, 0, Math.PI*2)
+            ctx.strokeStyle = `rgba(245,158,11,${al})`
+            ctx.lineWidth   = 1.5 * (1 - frac)
+            ctx.stroke()
+          }
+          if ((p.ringR ?? 0) >= rm) p.life = p.maxLife + 1
+          return
         }
-        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2)
-        ctx.fillStyle=p.ember?`rgba(255,${180+Math.floor(frac*60)},${Math.floor(frac*80)},${al})`:`rgba(255,185,60,${al*0.4})`
-        ctx.fill()
+
+        const frac = p.life/p.maxLife
+        const fade = frac<0.12 ? frac/0.12 : frac>0.72 ? 1-(frac-0.72)/0.28 : 1
+        const al   = p.op * fade
+
+        p.x += p.vx + mx*0.006 + (Math.random()-0.5)*0.1
+        p.y += p.vy + my*0.004
+
+        if (p.type==="ember" || p.type==="spark") {
+          // Glow halo
+          const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*(p.type==="spark"?4:6))
+          const hue = p.type==="spark" ? `255,${200+Math.floor(frac*55)},60` : `255,${170+Math.floor(frac*70)},${Math.floor(frac*90)}`
+          g.addColorStop(0, `rgba(${hue},${al*0.55})`)
+          g.addColorStop(1, "transparent")
+          ctx.beginPath()
+          ctx.arc(p.x,p.y,p.r*(p.type==="spark"?4:6),0,Math.PI*2)
+          ctx.fillStyle=g; ctx.fill()
+          // Core dot
+          ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2)
+          ctx.fillStyle = p.type==="spark"
+            ? `rgba(255,240,180,${al})`
+            : `rgba(255,${180+Math.floor(frac*60)},${Math.floor(frac*80)},${al})`
+          ctx.fill()
+        } else {
+          // Dust — soft large circle
+          const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*3)
+          g.addColorStop(0, `rgba(245,168,40,${al})`)
+          g.addColorStop(1, "transparent")
+          ctx.beginPath(); ctx.arc(p.x,p.y,p.r*3,0,Math.PI*2)
+          ctx.fillStyle=g; ctx.fill()
+        }
       })
+
       raf=requestAnimationFrame(draw)
     }
     draw()
@@ -284,10 +366,6 @@ export default function LandingPage() {
         .ms{font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 0,'wght' 300,'GRAD' 0,'opsz' 24;line-height:1;user-select:none;display:inline-block}
 
         @keyframes fadeUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes glowPulse{
-          0%,100%{filter:drop-shadow(0 0 22px rgba(245,158,11,.8)) drop-shadow(0 0 65px rgba(245,120,10,.32))}
-          50%{filter:drop-shadow(0 0 48px rgba(255,205,20,1)) drop-shadow(0 0 115px rgba(245,140,10,.52))}
-        }
         @keyframes portalAura{
           0%,100%{box-shadow:0 0 0 1px rgba(255,200,80,.12),0 0 60px 10px rgba(245,130,10,.55),0 0 130px 30px rgba(245,100,5,.3),0 0 260px 60px rgba(220,80,5,.15),0 50px 120px rgba(0,0,0,.9),inset 0 0 60px rgba(255,150,20,.1)}
           50%{box-shadow:0 0 0 1px rgba(255,215,80,.18),0 0 90px 18px rgba(255,165,20,.72),0 0 200px 50px rgba(245,120,10,.4),0 0 380px 80px rgba(220,90,5,.2),0 50px 120px rgba(0,0,0,.9),inset 0 0 100px rgba(255,185,35,.16)}
@@ -315,7 +393,6 @@ export default function LandingPage() {
         .a4{animation:fadeUp .9s cubic-bezier(.22,1,.36,1) .58s both}
         .a5{animation:fadeUp .9s cubic-bezier(.22,1,.36,1) .76s both}
 
-        /* ── Updated glass: zinc-dark tinted instead of warm brown ── */
         .glass{
           background:linear-gradient(135deg,rgba(255,255,255,.065) 0%,rgba(245,158,11,.018) 50%,rgba(255,255,255,.042) 100%);
           backdrop-filter:blur(28px) saturate(1.5) brightness(1.04);
@@ -334,21 +411,19 @@ export default function LandingPage() {
         .glass-top{position:absolute;top:0;left:0;right:0;height:1.5px;background:linear-gradient(90deg,transparent,rgba(245,158,11,.45),transparent);border-radius:12px 12px 0 0}
         .glass-bot{position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(245,158,11,.18),transparent);border-radius:0 0 12px 12px}
 
-        /* ── Nav: cleaner zinc dark ── */
         .nav-glass{
-          background:rgba(9,9,11,.82);
+          background:rgba(9,9,11,.72);
           backdrop-filter:blur(32px) saturate(1.6);-webkit-backdrop-filter:blur(32px) saturate(1.6);
           border-bottom:1px solid rgba(255,255,255,.07);
           box-shadow:0 1px 0 rgba(255,255,255,.03),0 20px 58px rgba(0,0,0,.6);
         }
         .sb-glass{
-          background:rgba(9,9,11,.88);
+          background:rgba(9,9,11,.82);
           backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);
           border-top:1px solid rgba(255,255,255,.06);
           box-shadow:0 -14px 46px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.025);
         }
 
-        /* ── CTA button: same amber gradient, kept ── */
         .btn-cta{
           position:relative;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;
           font-family:'Space Grotesk',sans-serif;font-size:.7rem;font-weight:700;letter-spacing:.3em;text-transform:uppercase;
@@ -371,23 +446,22 @@ export default function LandingPage() {
         .nav-lnk{font-family:'Space Grotesk',sans-serif;font-size:.64rem;font-weight:700;letter-spacing:.17em;text-transform:uppercase;color:rgba(255,255,255,.2);background:none;border:none;border-bottom:1.5px solid transparent;padding-bottom:3px;cursor:pointer;transition:color .2s,border-color .2s;text-decoration:none}
         .nav-lnk:hover,.nav-lnk.on{color:#F59E0B;border-bottom-color:rgba(245,158,11,.7)}
 
-        /* HUD data text ── updated to zinc-warm neutral */
         .hl{font-family:'Space Grotesk',sans-serif;font-size:.42rem;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.18);display:block;margin-bottom:4px}
         .hv{font-family:'Space Grotesk',sans-serif;font-size:.65rem;font-weight:700;letter-spacing:.12em;color:rgba(245,158,11,.82)}
         .sb{font-family:'Space Grotesk',sans-serif;font-size:.43rem;font-weight:600;letter-spacing:.19em;text-transform:uppercase;color:rgba(255,255,255,.2)}
 
         .proto{
           display:flex;flex-direction:column;gap:5px;padding:.68rem .95rem;
-          background:rgba(255,255,255,.04);
+          background:rgba(9,9,11,.55);
           backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-          border:1px solid rgba(255,255,255,.07);
+          border:1px solid rgba(255,255,255,.08);
           border-radius:8px;
           transition:border-color .25s,box-shadow .25s,transform .25s cubic-bezier(.22,1,.36,1);
           box-shadow:0 4px 20px rgba(0,0,0,.4);
         }
-        .proto:hover{border-color:rgba(245,158,11,.25);box-shadow:0 0 22px rgba(245,158,11,.1),0 8px 32px rgba(0,0,0,.55);transform:translateY(-2px)}
+        .proto:hover{border-color:rgba(245,158,11,.3);box-shadow:0 0 22px rgba(245,158,11,.12),0 8px 32px rgba(0,0,0,.55);transform:translateY(-2px)}
 
-        .stat-pill{display:flex;flex-direction:column;align-items:center;gap:4px;padding:.65rem 1.3rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:8px;transition:border-color .2s,background .2s;box-shadow:0 4px 18px rgba(0,0,0,.38)}
+        .stat-pill{display:flex;flex-direction:column;align-items:center;gap:4px;padding:.65rem 1.3rem;background:rgba(9,9,11,.55);border:1px solid rgba(255,255,255,.08);border-radius:8px;transition:border-color .2s,background .2s;box-shadow:0 4px 18px rgba(0,0,0,.38)}
         .stat-pill:hover{border-color:rgba(245,158,11,.22);background:rgba(245,158,11,.05)}
 
         .feed-wrap{height:90px;overflow:hidden;position:relative}
@@ -408,11 +482,9 @@ export default function LandingPage() {
           transform-origin:50% 100%;
         }
 
-        .portal-box{position:relative;overflow:hidden;border-radius:12px;animation:portalAura 5.5s ease-in-out infinite}
-
-        /* ── Connected overlay card ── */
+        /* Connected overlay card */
         .connected-card{
-          background:rgba(9,9,11,.9);
+          background:rgba(6,6,9,.88);
           backdrop-filter:blur(32px);-webkit-backdrop-filter:blur(32px);
           border:1px solid rgba(245,158,11,.2);
           border-top:1px solid rgba(245,158,11,.35);
@@ -429,50 +501,197 @@ export default function LandingPage() {
         ::-webkit-scrollbar-thumb{background:#27272E;border-radius:1px}
         ::-webkit-scrollbar-thumb:hover{background:#F59E0B}
         ::selection{background:rgba(245,158,11,.2)}
+
+        /* ── DOMINUS wordmark — solid color + text-shadow glow            */
+        /* DO NOT use -webkit-background-clip:text with any filter ancestor */
+        /* filter on parent + background-clip:text = invisible in WebKit    */
+        .dominus-wrap {
+          position: relative;
+          display: block;
+          width: 100%;
+          text-align: center;
+        }
+        /* Blur glow layer behind — separate element, filter safe here */
+        .dominus-glow {
+          position: absolute;
+          inset: 0;
+          font-family: 'Noto Serif', serif;
+          font-weight: 400;
+          line-height: 0.82;
+          letter-spacing: -0.02em;
+          font-size: clamp(4.5rem, 11vw, 9rem);
+          color: #F59E0B;
+          filter: blur(22px);
+          opacity: 0.38;
+          pointer-events: none;
+          animation: glowBreathe 5s ease-in-out infinite;
+          user-select: none;
+          text-align: center;
+          width: 100%;
+        }
+        @keyframes glowBreathe {
+          0%,100% { opacity: 0.28; filter: blur(18px); }
+          50%      { opacity: 0.55; filter: blur(30px); }
+        }
+        /* Sharp text on top — no filter anywhere in this chain */
+        .dominus-text {
+          position: relative;
+          font-family: 'Noto Serif', serif;
+          font-weight: 400;
+          line-height: 0.82;
+          letter-spacing: -0.02em;
+          margin: 0;
+          user-select: none;
+          font-size: clamp(4.5rem, 11vw, 9rem);
+          color: #FDE68A;
+          text-shadow:
+            0 0 14px rgba(255, 235, 120, 0.95),
+            0 0 32px rgba(245, 158, 11, 0.85),
+            0 0 65px rgba(245, 130, 10, 0.5),
+            0 0 120px rgba(230, 100, 5, 0.25),
+            0 3px 6px rgba(0, 0, 0, 0.99),
+            0 6px 20px rgba(0, 0, 0, 0.9);
+          display: block;
+          animation: textFlicker 12s ease-in-out infinite;
+        }
+        @keyframes textFlicker {
+          0%,100% { color: #FDE68A; }
+          45%      { color: #FFF8DC; }
+          50%      { color: #FFFBEB; }
+          55%      { color: #FDE68A; }
+          92%      { color: #FCD34D; }
+          94%      { color: #F59E0B; }
+          96%      { color: #FCD34D; }
+        }
       `}</style>
 
       <div style={{ position:"fixed", inset:0, background:"#09090B", overflow:"hidden" }}>
 
-        {/* Sky base */}
-        <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse 75% 55% at 50% 36%,#1a1000 0%,#100900 28%,#07060A 52%,#040405 75%,#020203 100%)" }} />
+        {/* ── SKY BASE ──────────────────────────────────────────────────── */}
+        <div style={{ position:"absolute", inset:0,
+          background:"radial-gradient(ellipse 75% 55% at 50% 36%,#1a1000 0%,#100900 28%,#07060A 52%,#040405 75%,#020203 100%)" }} />
 
-        {/* Aurora canvas */}
-        <canvas ref={auroraRef} style={{ position:"absolute", inset:0, zIndex:1, pointerEvents:"none", mixBlendMode:"screen" }} />
+        {/* ── GATE IMAGE — full-screen background ───────────────────────── */}
+        {/* This is the core visual change: image is now the bg, not a card */}
+        <div
+          ref={gateImgRef}
+          style={{
+            position:"absolute", inset:"-6%",          // slight overscan so parallax doesn't show edges
+            zIndex:1, pointerEvents:"none",
+            willChange:"transform",
+            transition:"transform .05s linear",
+          }}
+        >
+          <img
+            src={GATE_IMG}
+            alt=""
+            onLoad={() => setImgLoaded(true)}
+            style={{
+              width:"100%", height:"100%",
+              objectFit:"cover", objectPosition:"center 38%",
+              filter:"brightness(.82) contrast(1.18) saturate(1.35)",
+              opacity: imgLoaded ? 0.94 : 0,
+              imageRendering:"high-quality",
+              transition:"opacity 1.6s ease",
+            }}
+          />
+          {/* Amber haze behind the gate's glow core */}
+          <div style={{
+            position:"absolute", inset:0,
+            background:"radial-gradient(ellipse 38% 55% at 50% 46%,rgba(245,110,10,.18) 0%,transparent 70%)",
+            mixBlendMode:"screen",
+          }} />
+        </div>
 
-        {/* HUD grid */}
-        <div className="hud-grid" style={{ position:"absolute", inset:0, opacity:.12, pointerEvents:"none", zIndex:2 }} />
+        {/* ── AURORA CANVAS ─────────────────────────────────────────────── */}
+        <canvas ref={auroraRef} style={{ position:"absolute", inset:0, zIndex:2, pointerEvents:"none", mixBlendMode:"screen" }} />
 
-        {/* Floor grid */}
-        <div style={{ position:"absolute", bottom:0, left:"-8%", right:"-8%", height:"44vh", zIndex:2, pointerEvents:"none", opacity:.15 }}>
+        {/* ── HUD GRID ──────────────────────────────────────────────────── */}
+        <div className="hud-grid" style={{ position:"absolute", inset:0, opacity:.08, pointerEvents:"none", zIndex:3 }} />
+
+        {/* ── FLOOR GRID ────────────────────────────────────────────────── */}
+        <div style={{ position:"absolute", bottom:0, left:"-8%", right:"-8%", height:"44vh", zIndex:3, pointerEvents:"none", opacity:.14 }}>
           <div className="floor-grid" style={{ position:"absolute", inset:0 }} />
         </div>
 
-        {/* Radial vignette */}
-        <div style={{ position:"absolute", inset:0, zIndex:3, pointerEvents:"none",
-          background:"radial-gradient(ellipse 62% 60% at 50% 44%,transparent 0%,transparent 22%,rgba(5,5,8,.6) 68%,rgba(4,4,7,.94) 100%)" }} />
-
-        {/* Top/bottom overlays */}
+        {/* ── RADIAL VIGNETTE — draws focus to center where gate/wordmark are */}
         <div style={{ position:"absolute", inset:0, zIndex:4, pointerEvents:"none",
-          background:"linear-gradient(180deg,rgba(9,9,11,.9) 0%,rgba(9,9,11,.12) 11%,transparent 30%,transparent 58%,rgba(9,9,11,.8) 100%)" }} />
+          background:"radial-gradient(ellipse 55% 58% at 50% 44%,transparent 0%,transparent 14%,rgba(5,5,8,.52) 58%,rgba(4,4,7,.93) 100%)" }} />
 
-        {/* Scan line */}
-        <div style={{ position:"absolute", inset:0, overflow:"hidden", zIndex:5, pointerEvents:"none" }}>
+        {/* ── DARK CROWN — critical: darkens the TOP HALF where DOMINUS lives  */}
+        {/* Without this, the bright gate center bleeds up and swallows the gold text */}
+        <div style={{ position:"absolute", inset:0, zIndex:5, pointerEvents:"none",
+          background:"radial-gradient(ellipse 70% 52% at 50% 22%, rgba(4,3,6,.72) 0%, rgba(4,3,6,.4) 48%, transparent 75%)" }} />
+
+        {/* ── TOP/BOTTOM FADE OVERLAYS ───────────────────────────────────── */}
+        <div style={{ position:"absolute", inset:0, zIndex:6, pointerEvents:"none",
+          background:"linear-gradient(180deg,rgba(9,9,11,.95) 0%,rgba(9,9,11,.1) 9%,transparent 26%,transparent 62%,rgba(9,9,11,.88) 100%)" }} />
+
+        {/* ── SCAN LINE ─────────────────────────────────────────────────── */}
+        <div style={{ position:"absolute", inset:0, overflow:"hidden", zIndex:7, pointerEvents:"none" }}>
           <div style={{ position:"absolute", left:0, right:0, height:2, top:0,
             background:"linear-gradient(180deg,transparent,rgba(245,158,11,.03),transparent)",
             animation:"scanLine 30s linear infinite" }} />
         </div>
 
-        {/* Particle canvas */}
-        <canvas ref={particleRef} style={{ position:"absolute", inset:0, zIndex:10, pointerEvents:"none" }} />
+        {/* ── DEPTH LAYERS — floating amber orbs at different z-depths ─── */}
+        {/* These give a sense of 3D parallax depth in front of the gate   */}
+        <div style={{ position:"absolute", inset:0, zIndex:8, pointerEvents:"none" }}>
+          {/* Deep background haze — wide, soft, behind gate glow */}
+          <div style={{
+            position:"absolute", left:"30%", top:"20%",
+            width:"40vw", height:"40vw",
+            background:"radial-gradient(circle, rgba(245,130,10,.12) 0%, transparent 65%)",
+            filter:"blur(60px)", animation:"beamPulse 6s ease-in-out infinite",
+          }} />
+          {/* Mid-layer orb — left side depth accent */}
+          <div style={{
+            position:"absolute", left:"8%", top:"35%",
+            width:"18vw", height:"18vw",
+            background:"radial-gradient(circle, rgba(245,158,11,.07) 0%, transparent 70%)",
+            filter:"blur(40px)", animation:"beamPulse 8s ease-in-out 1s infinite",
+          }} />
+          {/* Mid-layer orb — right side depth accent */}
+          <div style={{
+            position:"absolute", right:"8%", top:"40%",
+            width:"15vw", height:"15vw",
+            background:"radial-gradient(circle, rgba(220,100,10,.06) 0%, transparent 70%)",
+            filter:"blur(35px)", animation:"beamPulse 7s ease-in-out 2.4s infinite",
+          }} />
+          {/* Near-layer spotlight — tight, bright, directly on gate portal center */}
+          <div style={{
+            position:"absolute", left:"50%", top:"44%", transform:"translateX(-50%)",
+            width:"22vw", height:"22vw",
+            background:"radial-gradient(circle, rgba(255,180,20,.14) 0%, transparent 55%)",
+            filter:"blur(20px)", animation:"portalAura 5s ease-in-out infinite",
+          }} />
+        </div>
 
-        {/* Decorative geometry */}
+        {/* ── FIRE CANVAS — now fixed at screen bottom, looks like gate base ── */}
+        <div style={{
+          position:"fixed", bottom:38, left:"50%", transform:"translateX(-50%)",
+          width:"clamp(340px,46vw,680px)", height:148,
+          pointerEvents:"none", zIndex:11,
+        }}>
+          <canvas ref={fireRef} style={{
+            width:"100%", height:"100%", imageRendering:"pixelated",
+            opacity:.78, mixBlendMode:"screen",
+            maskImage:"radial-gradient(ellipse 64% 88% at 50% 90%,black 0%,black 20%,transparent 66%)",
+            WebkitMaskImage:"radial-gradient(ellipse 64% 88% at 50% 90%,black 0%,black 20%,transparent 66%)",
+          }} />
+        </div>
+
+        {/* ── PARTICLES ─────────────────────────────────────────────────── */}
+        <canvas ref={particleRef} style={{ position:"absolute", inset:0, zIndex:12, pointerEvents:"none" }} />
+
+        {/* ── DECORATIVE GEOMETRY ───────────────────────────────────────── */}
         <div style={{ position:"fixed", top:"43%", left:46, width:13, height:13, border:"1px solid rgba(245,158,11,.25)", pointerEvents:"none", zIndex:11, animation:"floatY 5.8s ease-in-out infinite" }} />
         <div style={{ position:"fixed", top:"29%", left:76, width:7, height:7, border:"1px solid rgba(245,158,11,.12)", transform:"rotate(22deg)", pointerEvents:"none", zIndex:11, animation:"floatY 7.4s ease-in-out .9s infinite" }} />
         <div style={{ position:"fixed", right:62, top:"25%", width:1, height:155, background:"linear-gradient(180deg,transparent,rgba(245,158,11,.4),transparent)", pointerEvents:"none", zIndex:11, animation:"beamPulse 3.5s ease-in-out infinite" }} />
         <div style={{ position:"fixed", right:90, top:"40%", width:1, height:76, background:"linear-gradient(180deg,transparent,rgba(245,158,11,.18),transparent)", pointerEvents:"none", zIndex:11, animation:"beamPulse 4.7s ease-in-out 1.4s infinite" }} />
         <div style={{ position:"fixed", left:0, top:"63%", width:84, height:1, background:"linear-gradient(90deg,transparent,rgba(245,158,11,.2),transparent)", pointerEvents:"none", zIndex:11, animation:"beamPulse 4.1s ease-in-out .6s infinite" }} />
 
-        {/* Corner brackets */}
+        {/* ── CORNER BRACKETS ───────────────────────────────────────────── */}
         {([
           { t:62, l:14, bt:true, bl:true, dt:".4s" },
           { t:62, r:14, bt:true, br:true, dt:".5s" },
@@ -521,7 +740,6 @@ export default function LandingPage() {
                 letterSpacing:".18em", textTransform:"uppercase", color:"rgba(255,255,255,.3)" }}>{latency}ms</span>
             </div>
 
-            {/* ── FIX #3: show wallet address when connected, connect button when not ── */}
             {connected && publicKey ? (
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:6, padding:".3rem .75rem",
@@ -553,7 +771,7 @@ export default function LandingPage() {
           </div>
         </nav>
 
-        {/* ══ LEFT HUD ══════════════════════════════════════════════════════ */}
+        {/* ══ LEFT HUD ═════════════════════════════════════════════════════ */}
         <div ref={lHudRef} className="a1" style={{ position:"fixed", left:"1.15rem", top:"50%", zIndex:20, willChange:"transform" }}>
           <div className="glass" style={{ padding:"1.25rem 1.05rem", minWidth:138, display:"flex", flexDirection:"column", gap:"1.15rem" }}>
             <div className="glass-top" />
@@ -589,7 +807,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* ══ RIGHT HUD ═════════════════════════════════════════════════════ */}
+        {/* ══ RIGHT HUD ════════════════════════════════════════════════════ */}
         <div ref={rHudRef} className="a1" style={{ position:"fixed", right:"1.15rem", top:"50%", zIndex:20, willChange:"transform" }}>
           <div className="glass" style={{ padding:"1.25rem 1.05rem", minWidth:138, display:"flex", flexDirection:"column", gap:"1.15rem", alignItems:"flex-end" }}>
             <div className="glass-top" />
@@ -616,113 +834,76 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* ══ HERO ══════════════════════════════════════════════════════════ */}
-      <div style={{
-        position:"absolute", inset:0, zIndex:16,
-        display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"flex-start",
-        paddingTop:72, paddingBottom:48,
-        overflowY:"auto",
-      }}>
-          {/* Wordmark block */}
-          <div ref={heroTextRef} style={{ textAlign:"center", willChange:"transform", transformStyle:"preserve-3d", zIndex:2, marginBottom:".65rem" }}>
+        {/* ══ ZONE A: WORDMARK — occupies top 52% of screen ═════════════ */}
+        <div style={{
+          position:"absolute", top:60, left:0, right:0,
+          height:"calc(52vh - 60px)",
+          zIndex:16, pointerEvents:"none",
+          display:"flex", flexDirection:"column",
+          alignItems:"center", justifyContent:"center",
+          width:"100%",
+        }}>
+          {/* Eyebrow — block-level div so it never inline-flows with DOMINUS */}
+          <div style={{ display:"flex", justifyContent:"center", width:"100%", marginBottom:"1rem" }}>
             <div className="a0" style={{
               display:"inline-flex", alignItems:"center", gap:9, padding:".36rem .95rem",
-              background:"rgba(255,255,255,.05)",
+              background:"rgba(4,3,6,.8)",
               backdropFilter:"blur(14px)", WebkitBackdropFilter:"blur(14px)",
-              border:"1px solid rgba(255,255,255,.08)",
-              borderRadius:8, marginBottom:"1.1rem",
-              boxShadow:"inset 0 1px 0 rgba(255,255,255,.05),0 4px 20px rgba(0,0,0,.44)",
+              border:"1px solid rgba(255,255,255,.09)",
+              borderRadius:8,
             }}>
               <span style={{ width:5, height:5, borderRadius:"50%", background:"#22C55E",
-                boxShadow:"0 0 7px rgba(34,197,94,.95)", display:"inline-block", animation:"blink 2s ease-in-out infinite" }} />
+                boxShadow:"0 0 7px rgba(34,197,94,.95)", display:"inline-block",
+                animation:"blink 2s ease-in-out infinite" }} />
               <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".46rem", fontWeight:600,
-                letterSpacing:".33em", textTransform:"uppercase", color:"rgba(255,255,255,.3)" }}>
+                letterSpacing:".28em", textTransform:"uppercase", color:"rgba(255,255,255,.38)" }}>
                 SYSTEM STATUS: CONVERGENCE DETECTED
               </span>
               <span style={{ width:5, height:5, borderRadius:"50%", background:"#22C55E",
-                boxShadow:"0 0 7px rgba(34,197,94,.95)", display:"inline-block", animation:"blink 2s ease-in-out .85s infinite" }} />
+                boxShadow:"0 0 7px rgba(34,197,94,.95)", display:"inline-block",
+                animation:"blink 2s ease-in-out .85s infinite" }} />
             </div>
+          </div>
 
-            <h1 className="a1" style={{
-              fontFamily:"'Noto Serif',serif", fontWeight:400, lineHeight:.86,
-              letterSpacing:"-.025em", margin:0, userSelect:"none",
-              fontSize:"clamp(4.6rem,12.5vw,9.8rem)",
-              background:"linear-gradient(155deg,#FCD34D 0%,#F59E0B 44%,#D97706 80%,#92400E 100%)",
-              WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text",
-              animation:"glowPulse 4.8s ease-in-out infinite",
-            }}>
-              <span style={{ display:"inline-block", animation:"glitch 22s ease-in-out infinite" }}>DOMINUS</span>
-            </h1>
+          {/* DOMINUS — block level so it stacks under eyebrow, not beside it */}
+          <div
+            ref={heroTextRef}
+            style={{
+              display:"flex", flexDirection:"column", alignItems:"center",
+              width:"100%", willChange:"transform", transformStyle:"preserve-3d",
+            }}
+          >
+            <div className="a1 dominus-wrap" style={{ display:"block", textAlign:"center", width:"100%" }}>
+              <div className="dominus-glow" aria-hidden="true" style={{ textAlign:"center" }}>DOMINUS</div>
+              <h1 className="dominus-text" style={{ textAlign:"center" }}>
+                <span style={{ display:"inline-block", animation:"glitch 22s ease-in-out infinite" }}>DOMINUS</span>
+              </h1>
+            </div>
 
             <p className="a2" style={{
               fontFamily:"'Noto Serif',serif", fontStyle:"italic",
-              fontSize:"clamp(.7rem,1.35vw,.92rem)", letterSpacing:".24em",
-              color:"rgba(148,163,184,.35)", marginTop:".8rem",
-              textShadow:"0 2px 16px rgba(0,0,0,.95)",
+              fontSize:"clamp(.75rem,1.35vw,.95rem)", letterSpacing:".3em",
+              color:"rgba(177,163,145,.72)", marginTop:".9rem",
+              textShadow:"0 0 30px rgba(0,0,0,1), 0 2px 8px rgba(0,0,0,1)",
+              textAlign:"center",
             }}>Sanctum of the Eternal Gate</p>
           </div>
+        </div>
 
-          {/* ── PORTAL IMAGE ── */}
-          <div className="a2" style={{ position:"relative", zIndex:1, marginBottom:"1.1rem" }}>
-            <div style={{
-              position:"absolute", top:"5%", left:"50%", transform:"translateX(-50%)",
-              width:"160%", height:"80%",
-              background:"radial-gradient(ellipse,rgba(245,130,15,.25) 0%,rgba(245,95,5,.08) 44%,transparent 70%)",
-              filter:"blur(70px)", pointerEvents:"none", zIndex:0,
-            }} />
+        {/* ══ ZONE B: CTAs — bottom 48% of screen ══════════════════════ */}
+        <div style={{
+          position:"absolute", top:"52vh", left:0, right:0,
+          bottom:38,
+          zIndex:16,
+          display:"flex", flexDirection:"column",
+          alignItems:"center", justifyContent:"center",
+          overflowY:"auto", gap:0,
+          paddingTop:".5rem", paddingBottom:".5rem",
+        }}>
 
-            <div ref={portalRef} style={{ position:"relative", willChange:"transform", transformStyle:"preserve-3d" }}>
-              <div className="portal-box" style={{  width:"clamp(220px,25vw,360px)", aspectRatio:"3/4" }}>
-                <div style={{
-                  position:"absolute", inset:"-18px", borderRadius:24, background:"transparent",
-                  boxShadow:"0 0 50px 12px rgba(245,140,10,.6),0 0 120px 30px rgba(245,100,5,.38),0 0 240px 60px rgba(220,75,5,.18),0 0 400px 100px rgba(180,50,0,.1)",
-                  pointerEvents:"none", zIndex:-1,
-                }} />
-                <img src={GATE_IMG} alt="The Eternal Gate"
-                  onLoad={() => setImgLoaded(true)}
-                  style={{
-                    width:"100%", height:"100%", objectFit:"cover", objectPosition:"center 18%",
-                    filter:"brightness(1.12) contrast(1.08) saturate(1.15)",
-                    display:"block", opacity: imgLoaded ? 1 : 0, transition:"opacity .9s ease", borderRadius:12,
-                  }} />
-                <div style={{ position:"absolute", inset:0, pointerEvents:"none", borderRadius:12,
-                  background:"radial-gradient(ellipse 58% 52% at 50% 38%,transparent 0%,transparent 32%,rgba(5,5,8,.5) 78%,rgba(4,4,7,.84) 100%)" }} />
-                <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"44%", pointerEvents:"none",
-                  background:"linear-gradient(0deg,rgba(9,9,11,.97) 0%,rgba(9,9,11,.55) 40%,transparent 100%)",
-                  borderRadius:"0 0 12px 12px" }} />
-                <div style={{ position:"absolute", top:0, left:0, right:0, height:"18%", pointerEvents:"none",
-                  background:"linear-gradient(180deg,rgba(9,9,11,.65) 0%,transparent 100%)",
-                  borderRadius:"12px 12px 0 0" }} />
-                {!imgLoaded && (
-                  <div style={{ position:"absolute", inset:0, borderRadius:12,
-                    background:"linear-gradient(135deg,#0d0d10,#1a1a20,#0d0d10)",
-                    display:"flex", alignItems:"center", justifyContent:"center" }}>
-                    <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".44rem", letterSpacing:".22em",
-                      textTransform:"uppercase", color:"rgba(245,158,11,.25)", animation:"blink 1.4s ease-in-out infinite" }}>
-                      LOADING GATE...
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Fire canvas */}
-              <div style={{ position:"absolute", bottom:-18, left:"50%", transform:"translateX(-50%)",
-                width:"clamp(240px,30vw,400px)", height:110, pointerEvents:"none", zIndex:5 }}>
-                <canvas ref={fireRef} style={{
-                  width:"100%", height:"100%", imageRendering:"pixelated",
-                  opacity:.75, mixBlendMode:"screen",
-                  maskImage:"radial-gradient(ellipse 62% 82% at 50% 82%,black 0%,black 28%,transparent 74%)",
-                  WebkitMaskImage:"radial-gradient(ellipse 62% 82% at 50% 82%,black 0%,black 28%,transparent 74%)",
-                }} />
-              </div>
-            </div>
-          </div>
-
-          {/* ── FIX #3: CTAs differ based on wallet state ── */}
           {connected && publicKey ? (
-            /* Connected state — show useful panel instead of connect button */
-            <div className="a3 connected-card" style={{ padding:"20px 24px", width:"clamp(320px,36vw,460px)", zIndex:2 }}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+            <div className="a3 connected-card" style={{ padding:"18px 22px", width:"clamp(300px,34vw,440px)", zIndex:2 }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                   <div style={{ width:7, height:7, borderRadius:"50%", background:"#F59E0B",
                     boxShadow:"0 0 7px rgba(245,158,11,.8)" }} />
@@ -738,11 +919,11 @@ export default function LandingPage() {
                   DISCONNECT
                 </button>
               </div>
-              <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".56rem", color:"rgba(245,158,11,.4)",
-                letterSpacing:".06em", wordBreak:"break-all", marginBottom:16, fontWeight:500 }}>
+              <p style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".54rem", color:"rgba(245,158,11,.4)",
+                letterSpacing:".06em", wordBreak:"break-all", marginBottom:14, fontWeight:500 }}>
                 {publicKey.toString().slice(0,20)}…{publicKey.toString().slice(-8)}
               </p>
-              <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:16 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:5, marginBottom:14 }}>
                 {[
                   { icon:"psychology",            label:"Oracle Command",      sub:"Open the AI chat interface",        action:() => router.push("/chat") },
                   { icon:"account_balance_wallet", label:"Check Portfolio",     sub:"View balances & positions",         action:() => router.push("/chat") },
@@ -760,7 +941,7 @@ export default function LandingPage() {
                   </button>
                 ))}
               </div>
-              <button className="btn-cta" style={{ width:"100%", padding:"1rem 0", fontSize:".65rem", letterSpacing:".22em" }}
+              <button className="btn-cta" style={{ width:"100%", padding:".95rem 0", fontSize:".65rem", letterSpacing:".22em" }}
                 onClick={() => router.push("/chat")}>
                 <span className="btn-shine" />
                 <span className="ms" style={{ fontSize:16 }}>psychology</span>
@@ -768,21 +949,18 @@ export default function LandingPage() {
               </button>
             </div>
           ) : (
-            /* Disconnected state — standard connect CTAs */
-            <div className="a3" style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:".9rem", zIndex:2 }}>
-              <button className="btn-cta" style={{ padding:"1.05rem 3.4rem" }} onClick={() => setVisible(true)}>
-                <span className="btn-shine" />
-                <span className="ms" style={{ fontSize:16 }}>account_balance_wallet</span>
-                CONNECT WALLET
-              </button>
-              <button className="btn-ghost" onClick={() => router.push("/chat")}>ENTER VIA GUEST PROTOCOL</button>
-            </div>
-          )}
-
-          {/* Protocol cards */}
-          {!connected && (
             <>
-              <div className="a4" style={{ display:"flex", gap:6, marginTop:"1.3rem", flexWrap:"wrap", justifyContent:"center", maxWidth:540, zIndex:2 }}>
+              <div className="a3" style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:".9rem", zIndex:2 }}>
+                <button className="btn-cta" style={{ padding:"1.15rem 3.6rem" }} onClick={() => setVisible(true)}>
+                  <span className="btn-shine" />
+                  <span className="ms" style={{ fontSize:16 }}>account_balance_wallet</span>
+                  CONNECT WALLET
+                </button>
+                <button className="btn-ghost" onClick={() => router.push("/chat")}>ENTER VIA GUEST PROTOCOL</button>
+              </div>
+
+              {/* Protocol chips */}
+              <div className="a4" style={{ display:"flex", gap:6, marginTop:"1.4rem", flexWrap:"wrap", justifyContent:"center", maxWidth:540, zIndex:2 }}>
                 {[
                   { p:"JUPITER",    d:"Best-route swaps",  icon:"swap_horiz",  apy:null    },
                   { p:"KAMINO",     d:"Yield deposits",     icon:"trending_up", apy:"5.8%" },
@@ -802,7 +980,7 @@ export default function LandingPage() {
                 ))}
               </div>
 
-              <div className="a4" style={{ display:"flex", gap:6, marginTop:".9rem", flexWrap:"wrap", justifyContent:"center", zIndex:2 }}>
+              <div className="a4" style={{ display:"flex", gap:6, marginTop:".8rem", flexWrap:"wrap", justifyContent:"center", zIndex:2 }}>
                 {[{ l:"PROTOCOLS",v:"4" },{ l:"NETWORK",v:"SOLANA" },{ l:"SPEED",v:"< 1s" },{ l:"TVL",v:"$4.2M" }].map(({ l,v }) => (
                   <div key={l} className="stat-pill">
                     <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".41rem", letterSpacing:".2em", textTransform:"uppercase", color:"rgba(255,255,255,.18)" }}>{l}</span>
@@ -814,7 +992,7 @@ export default function LandingPage() {
           )}
 
           <p className="a5" style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".41rem", letterSpacing:".14em",
-            textTransform:"uppercase", color:"rgba(255,255,255,.1)", marginTop:"1rem", zIndex:2 }}>
+            textTransform:"uppercase", color:"rgba(255,255,255,.1)", marginTop:".8rem", zIndex:2 }}>
             DOMINUS NEVER EXECUTES WITHOUT YOUR EXPLICIT CONFIRMATION
           </p>
         </div>
