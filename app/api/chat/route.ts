@@ -229,13 +229,21 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Hosted providers: Vercel AI SDK handles everything ────────────────────
-    if (config.provider === "anthropic" || config.provider === "openai") {
-      const model =
-        config.provider === "anthropic"
-          ? createAnthropic({ apiKey: config.apiKey })(
-              config.model || "claude-sonnet-4-20250514"
-            )
-          : createOpenAI({ apiKey: config.apiKey })(config.model || "gpt-4o")
+  if (config.provider === "anthropic" || config.provider === "openai" || config.provider === "groq") {
+  const groqOrOpenAI = createOpenAI({
+    apiKey: config.apiKey,
+    ...(config.provider === "groq" ? { baseURL: "https://api.groq.com/openai/v1" } : {}),
+  })
+  const model =
+    config.provider === "anthropic"
+      ? createAnthropic({ apiKey: config.apiKey })(
+          config.model || "claude-sonnet-4-20250514"
+        )
+      : groqOrOpenAI(
+          config.provider === "groq"
+            ? (config.model || "llama-3.3-70b-versatile")
+            : (config.model || "gpt-4o")
+        )
 
       const result = streamText({
         model,
