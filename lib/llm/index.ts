@@ -19,6 +19,14 @@ export function getLLMModel(config?: Partial<LLMConfig>) {
       const openai = createOpenAI({ apiKey })
       return openai(model || "gpt-4o")
     }
+    case "groq": {
+      // Groq uses OpenAI-compatible API — no new package needed
+      const groq = createOpenAI({
+        apiKey,
+        baseURL: "https://api.groq.com/openai/v1",
+      })
+      return groq(model || "llama-3.1-8b-instant")
+    }
     default:
       throw new Error(`Unknown LLM provider: ${provider}`)
   }

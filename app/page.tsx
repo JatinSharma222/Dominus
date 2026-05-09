@@ -843,29 +843,7 @@ export default function LandingPage() {
           alignItems:"center", justifyContent:"center",
           width:"100%",
         }}>
-          {/* Eyebrow — block-level div so it never inline-flows with DOMINUS */}
-          <div style={{ display:"flex", justifyContent:"center", width:"100%", marginBottom:"1rem" }}>
-            <div className="a0" style={{
-              display:"inline-flex", alignItems:"center", gap:9, padding:".36rem .95rem",
-              background:"rgba(4,3,6,.8)",
-              backdropFilter:"blur(14px)", WebkitBackdropFilter:"blur(14px)",
-              border:"1px solid rgba(255,255,255,.09)",
-              borderRadius:8,
-            }}>
-              <span style={{ width:5, height:5, borderRadius:"50%", background:"#22C55E",
-                boxShadow:"0 0 7px rgba(34,197,94,.95)", display:"inline-block",
-                animation:"blink 2s ease-in-out infinite" }} />
-              <span style={{ fontFamily:"'Space Grotesk',sans-serif", fontSize:".46rem", fontWeight:600,
-                letterSpacing:".28em", textTransform:"uppercase", color:"rgba(255,255,255,.38)" }}>
-                SYSTEM STATUS: CONVERGENCE DETECTED
-              </span>
-              <span style={{ width:5, height:5, borderRadius:"50%", background:"#22C55E",
-                boxShadow:"0 0 7px rgba(34,197,94,.95)", display:"inline-block",
-                animation:"blink 2s ease-in-out .85s infinite" }} />
-            </div>
-          </div>
-
-          {/* DOMINUS — block level so it stacks under eyebrow, not beside it */}
+          {/* DOMINUS — block level so it stacks cleanly, centered */}
           <div
             ref={heroTextRef}
             style={{
