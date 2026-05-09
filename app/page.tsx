@@ -591,7 +591,6 @@ export default function LandingPage() {
               objectFit:"cover", objectPosition:"center 38%",
               filter:"brightness(.82) contrast(1.18) saturate(1.35)",
               opacity: imgLoaded ? 0.94 : 0,
-              imageRendering:"high-quality",
               transition:"opacity 1.6s ease",
             }}
           />
