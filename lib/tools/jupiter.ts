@@ -53,7 +53,6 @@ interface RoutePlan {
   percent: number
 }
 
-// Returned by the server-side AI tool — no Jupiter API call needed
 export interface JupiterSwapIntent {
   type: "swap_intent"
   action: "swap"
@@ -66,7 +65,6 @@ export interface JupiterSwapIntent {
   slippageBps: number
 }
 
-// Built client-side after fetching a live quote
 export interface JupiterSwapPreview {
   type: "tx_preview"
   action: "swap"
@@ -129,7 +127,7 @@ export function fromRawAmount(rawAmount: string, symbol: string): number {
   return parseInt(rawAmount, 10) / Math.pow(10, decimals)
 }
 
-// ─── Mint resolution (server-safe — only calls Jupiter token list if unknown) ─
+// ─── Mint resolution ──────────────────────────────────────────────────────────
 
 async function resolveMint(symbol: string): Promise<string> {
   const upper = symbol.toUpperCase()
@@ -148,8 +146,6 @@ async function resolveMint(symbol: string): Promise<string> {
 }
 
 // ─── SERVER-SIDE tool execute ─────────────────────────────────────────────────
-// Only resolves mint addresses. No call to quote-api.jup.ag.
-// The actual quote is fetched client-side in TxConfirmCard.
 
 export async function executeJupiterSwap({
   fromToken,
@@ -180,12 +176,10 @@ export async function executeJupiterSwap({
     toMint,
     inputAmount: amount,
     slippageBps: Math.round((slippage ?? 0.5) * 100),
-
   }
 }
 
 // ─── CLIENT-SIDE quote fetch ──────────────────────────────────────────────────
-// Called from TxConfirmCard in the browser — never from route.ts.
 
 export async function fetchJupiterQuote(intent: JupiterSwapIntent): Promise<JupiterSwapPreview> {
   const rawAmount = toRawAmount(intent.inputAmount, intent.fromToken)
@@ -198,11 +192,9 @@ export async function fetchJupiterQuote(intent: JupiterSwapIntent): Promise<Jupi
     onlyDirectRoutes: "false",
   })
 
-  // Try proxy first, fall back to direct Jupiter call
   let res: Response | null = null
   let lastError = ""
 
-  // Attempt 1: our Next.js proxy
   try {
     const proxyUrl = new URL("/api/jupiter/quote", window.location.origin)
     params.forEach((v, k) => proxyUrl.searchParams.set(k, v))
@@ -217,7 +209,6 @@ export async function fetchJupiterQuote(intent: JupiterSwapIntent): Promise<Jupi
     res = null
   }
 
-  // Attempt 2: direct browser fetch (Jupiter supports CORS)
   if (!res) {
     try {
       const directUrl = new URL("https://lite-api.jup.ag/swap/v1/quote")
@@ -267,8 +258,8 @@ export async function fetchJupiterQuote(intent: JupiterSwapIntent): Promise<Jupi
     quoteResponse:   quote,
   }
 }
+
 // ─── CLIENT-SIDE transaction builder ─────────────────────────────────────────
-// Called from TxConfirmCard after user clicks Confirm. Never from route.ts.
 
 export async function buildJupiterSwapTransaction(
   preview: JupiterSwapPreview,
@@ -283,6 +274,12 @@ export async function buildJupiterSwapTransaction(
       wrapAndUnwrapSol:          true,
       dynamicComputeUnitLimit:   true,
       prioritizationFeeLamports: "auto",
+      // KEY FIX: asLegacyTransaction avoids Address Lookup Table errors.
+      // ALT-based VersionedTransactions fail on mainnet with
+      // "Transaction loads an address table account that doesn't exist"
+      // because ALTs take time to propagate to all validators.
+      // Legacy format skips ALTs entirely and works immediately.
+      asLegacyTransaction: true,
     }),
   })
 
@@ -293,5 +290,24 @@ export async function buildJupiterSwapTransaction(
 
   const { swapTransaction } = await res.json() as { swapTransaction: string }
   const txBytes = Buffer.from(swapTransaction, "base64")
-  return VersionedTransaction.deserialize(txBytes)
+
+  // Jupiter with asLegacyTransaction=true returns a legacy Transaction.
+  // We wrap it in a VersionedTransaction so the rest of the signing/sending
+  // code in TxConfirmCard stays unchanged.
+  const { Transaction, TransactionMessage, VersionedTransaction: VT } =
+    await import("@solana/web3.js")
+
+  try {
+    // First try: maybe Jupiter still returned a versioned tx
+    return VersionedTransaction.deserialize(txBytes)
+  } catch {
+    // Fallback: legacy transaction — compile to v0 message for uniform handling
+    const legacyTx = Transaction.from(txBytes)
+    const msg = new TransactionMessage({
+      payerKey:        legacyTx.feePayer!,
+      recentBlockhash: legacyTx.recentBlockhash!,
+      instructions:    legacyTx.instructions,
+    }).compileToV0Message()
+    return new VT(msg)
+  }
 }
