@@ -582,6 +582,7 @@ TOOL CALL RULES:
 - For greetings — respond with a short greeting, NO tools
 - For vague messages — ask a clarifying question, NO tools
 - If user says "yes", "confirm", "do it", "stake it", "create it" after seeing a card — tell them to click the Confirm button
+- When the user says "stream it" or "stream weekly/monthly" after a swap, ONLY call create_payment_stream. NEVER call deposit_for_yield in the same request unless the user explicitly says "deposit to Kamino".
 
 CHOOSING BETWEEN KAMINO AND JITO:
 - stake_sol is ONLY for SOL → jitoSOL liquid staking (validator rewards + MEV tips)

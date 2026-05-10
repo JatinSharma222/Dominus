@@ -84,7 +84,7 @@ export default function TxConfirmCard({ intent, onSuccess, onCancel }: TxConfirm
       setStatus("signing")
       const signed = await signTransaction(tx)
       setStatus("sending")
-      const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: false, maxRetries: 3 })
+      const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: true, maxRetries: 3 })
       await connection.confirmTransaction(sig, "confirmed")
       setTxid(sig); setStatus("confirmed"); onSuccess?.(sig)
     } catch (err) {
