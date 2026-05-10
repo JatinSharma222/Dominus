@@ -10,8 +10,7 @@ import MessageBubble from "@/components/MessageBubble";
 import RightPanel from "@/components/RightPanel";
 import { useRouter } from "next/navigation";
 
-const AETHER_IMG =
-  "https://lh3.googleusercontent.com/aida-public/AB6AXuA8O-jxGq9p6pB2fhiscu4C-DTKs4C09K8meX9zguYmeMrhNe6q4QM7dv5QfDXGYL6uAgpBKmN5Q2tGcJlPM1OkJlkQuWjeWiqkoq2pGJLrSy6daejDBvONTDqOdDuCtB8yp73cQFNewH5t4Rz-5l6N9L8864wZTLKGb8MC5nNSnfwqh4xDTrnheF1zQE5gaeZ4B-jYEVJh0lgNIbtHmXSvZFtMgQ1z3pmXqf7-8swJqWCH5CePQ1A2sfZV_EMt13kNd1Uq2KdYqqZk";
+const AETHER_IMG = "/images/aether-avatar.jpg"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function shortenAddress(addr: string, chars = 4) {
@@ -979,7 +978,7 @@ export default function ChatPage() {
                 color: "#3F3F46",
               }}
             >
-              LLAMA3.1:8B
+              GROQ · LLAMA-3.3
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
