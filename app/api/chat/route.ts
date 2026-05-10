@@ -271,7 +271,7 @@ export async function POST(req: NextRequest) {
             )
           : groqOrOpenAI(
               config.provider === "groq"
-                ? config.model || "llama-3.3-70b-versatile"
+                ? "llama-3.3-70b-versatile"
                 : config.model || "gpt-4o",
             );
 
