@@ -280,7 +280,7 @@ export async function POST(req: NextRequest) {
         system: buildSystemPrompt(walletAddress),
         messages,
         tools: allTools,
-        maxSteps: 5,
+        maxSteps: 2,
       });
       return result.toDataStreamResponse();
     }
