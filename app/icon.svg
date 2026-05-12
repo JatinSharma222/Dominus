@@ -1,0 +1,79 @@
+<svg width="680" height="680" viewBox="0 0 680 680" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="60%" r="55%"><stop offset="0%" stop-color="#1A0E00"/><stop offset="60%" stop-color="#0D0A06"/><stop offset="100%" stop-color="#080808"/></radialGradient>
+    <radialGradient id="portalGlow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#F59E0B" stop-opacity="0.35"/><stop offset="40%" stop-color="#D97706" stop-opacity="0.12"/><stop offset="100%" stop-color="#000000" stop-opacity="0"/></radialGradient>
+    <radialGradient id="innerGlow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#FFC174" stop-opacity="0.22"/><stop offset="70%" stop-color="#F59E0B" stop-opacity="0.06"/><stop offset="100%" stop-color="#000000" stop-opacity="0"/></radialGradient>
+    <linearGradient id="stoneLeft" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#1C1511"/><stop offset="60%" stop-color="#2A2018"/><stop offset="100%" stop-color="#3A2E22"/></linearGradient>
+    <linearGradient id="stoneRight" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#3A2E22"/><stop offset="40%" stop-color="#2A2018"/><stop offset="100%" stop-color="#1C1511"/></linearGradient>
+    <linearGradient id="stoneTop" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#2A2018"/><stop offset="100%" stop-color="#1C1511"/></linearGradient>
+    <linearGradient id="crackGlow1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9"/><stop offset="40%" stop-color="#FFC174" stop-opacity="0.8"/><stop offset="100%" stop-color="#F59E0B" stop-opacity="0.2"/></linearGradient>
+    <linearGradient id="crackGlow2" x1="100%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9"/><stop offset="40%" stop-color="#FFC174" stop-opacity="0.8"/><stop offset="100%" stop-color="#F59E0B" stop-opacity="0.2"/></linearGradient>
+    <linearGradient id="goldEdge" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#FFDDB8"/><stop offset="40%" stop-color="#F59E0B"/><stop offset="100%" stop-color="#92400E"/></linearGradient>
+    <linearGradient id="goldH" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#92400E"/><stop offset="50%" stop-color="#F59E0B"/><stop offset="100%" stop-color="#92400E"/></linearGradient>
+    <linearGradient id="dGold" x1="0%" y1="0%" x2="50%" y2="100%"><stop offset="0%" stop-color="#FFDDB8"/><stop offset="50%" stop-color="#FFC174"/><stop offset="100%" stop-color="#B45309"/></linearGradient>
+    <linearGradient id="beamFade" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#FFF8F0" stop-opacity="0"/><stop offset="20%" stop-color="#FFC174" stop-opacity="0.6"/><stop offset="50%" stop-color="#FFFFFF" stop-opacity="1"/><stop offset="80%" stop-color="#FFC174" stop-opacity="0.6"/><stop offset="100%" stop-color="#F59E0B" stop-opacity="0"/></linearGradient>
+    <linearGradient id="groundGrad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#3D2B10" stop-opacity="0.7"/><stop offset="100%" stop-color="#1A0E00" stop-opacity="0"/></linearGradient>
+    <filter id="softBlur"><feGaussianBlur stdDeviation="3"/></filter>
+    <filter id="tinyBlur"><feGaussianBlur stdDeviation="1.5"/></filter>
+  </defs>
+  <rect width="680" height="680" fill="url(#bg)" rx="28"/>
+  <ellipse cx="340" cy="580" rx="280" ry="40" fill="url(#groundGrad)"/>
+  <line x1="100" y1="570" x2="580" y2="570" stroke="#3D2B10" stroke-width="0.5" stroke-opacity="0.4"/>
+  <ellipse cx="340" cy="320" rx="190" ry="200" fill="url(#portalGlow)" filter="url(#softBlur)"/>
+  <rect x="108" y="430" width="82" height="148" fill="url(#stoneLeft)" rx="2"/>
+  <rect x="118" y="192" width="64" height="244" fill="url(#stoneLeft)" rx="2"/>
+  <path d="M108,192 L118,170 L182,170 L192,192 Z" fill="url(#stoneTop)"/>
+  <line x1="182" y1="170" x2="182" y2="578" stroke="#F59E0B" stroke-width="1" stroke-opacity="0.5"/>
+  <line x1="118" y1="250" x2="182" y2="250" stroke="#0E0E0E" stroke-width="1" stroke-opacity="0.5"/>
+  <line x1="118" y1="310" x2="182" y2="310" stroke="#0E0E0E" stroke-width="1" stroke-opacity="0.5"/>
+  <line x1="118" y1="370" x2="182" y2="370" stroke="#0E0E0E" stroke-width="1" stroke-opacity="0.5"/>
+  <line x1="118" y1="430" x2="182" y2="430" stroke="#0E0E0E" stroke-width="1.5" stroke-opacity="0.6"/>
+  <path d="M182,220 L175,258 L183,280 L172,340 L180,380 L170,430" fill="none" stroke="url(#crackGlow1)" stroke-width="1.5" filter="url(#tinyBlur)"/>
+  <path d="M182,220 L175,258 L183,280 L172,340 L180,380 L170,430" fill="none" stroke="#FFFFFF" stroke-width="0.5"/>
+  <rect x="490" y="430" width="82" height="148" fill="url(#stoneRight)" rx="2"/>
+  <rect x="498" y="192" width="64" height="244" fill="url(#stoneRight)" rx="2"/>
+  <path d="M488,192 L498,170 L562,170 L572,192 Z" fill="url(#stoneTop)"/>
+  <line x1="498" y1="170" x2="498" y2="578" stroke="#F59E0B" stroke-width="1" stroke-opacity="0.5"/>
+  <line x1="498" y1="250" x2="562" y2="250" stroke="#0E0E0E" stroke-width="1" stroke-opacity="0.5"/>
+  <line x1="498" y1="310" x2="562" y2="310" stroke="#0E0E0E" stroke-width="1" stroke-opacity="0.5"/>
+  <line x1="498" y1="370" x2="562" y2="370" stroke="#0E0E0E" stroke-width="1" stroke-opacity="0.5"/>
+  <line x1="498" y1="430" x2="562" y2="430" stroke="#0E0E0E" stroke-width="1.5" stroke-opacity="0.6"/>
+  <path d="M498,220 L505,258 L497,280 L508,340 L500,380 L510,430" fill="none" stroke="url(#crackGlow2)" stroke-width="1.5" filter="url(#tinyBlur)"/>
+  <path d="M498,220 L505,258 L497,280 L508,340 L500,380 L510,430" fill="none" stroke="#FFFFFF" stroke-width="0.5"/>
+  <path d="M108,200 Q108,80 340,68 Q572,80 572,200" fill="none" stroke="url(#goldEdge)" stroke-width="14"/>
+  <path d="M118,200 Q118,92 340,82 Q562,92 562,200" fill="none" stroke="#0E0E0E" stroke-width="4"/>
+  <path d="M113,200 Q113,86 340,75 Q567,86 567,200" fill="none" stroke="#FFDDB8" stroke-width="0.8" stroke-opacity="0.6"/>
+  <path d="M182,192 Q182,105 340,95 Q498,105 498,192" fill="none" stroke="#F59E0B" stroke-width="0.8" stroke-opacity="0.4"/>
+  <polygon points="340,62 352,78 340,90 328,78" fill="#F59E0B" stroke="#FFDDB8" stroke-width="0.8"/>
+  <polygon points="340,68 348,78 340,86 332,78" fill="#FFFFFF" fill-opacity="0.6"/>
+  <path d="M222,148 L240,168 L228,185" fill="none" stroke="url(#crackGlow1)" stroke-width="1.8" filter="url(#tinyBlur)"/>
+  <path d="M222,148 L240,168 L228,185" fill="none" stroke="#FFFFFF" stroke-width="0.6"/>
+  <path d="M458,148 L440,168 L452,185" fill="none" stroke="url(#crackGlow2)" stroke-width="1.8" filter="url(#tinyBlur)"/>
+  <path d="M458,148 L440,168 L452,185" fill="none" stroke="#FFFFFF" stroke-width="0.6"/>
+  <path d="M310,72 L300,92 L315,108" fill="none" stroke="url(#crackGlow1)" stroke-width="1.5" filter="url(#tinyBlur)"/>
+  <path d="M370,72 L380,92 L365,108" fill="none" stroke="url(#crackGlow2)" stroke-width="1.5" filter="url(#tinyBlur)"/>
+  <path d="M182,192 Q182,105 340,95 Q498,105 498,192 L498,570 L182,570 Z" fill="#050402"/>
+  <ellipse cx="340" cy="340" rx="148" ry="200" fill="url(#innerGlow)"/>
+  <rect x="336" y="88" width="8" height="482" fill="url(#beamFade)" rx="4"/>
+  <line x1="182" y1="570" x2="498" y2="570" stroke="#F59E0B" stroke-width="1.5" stroke-opacity="0.6"/>
+  <ellipse cx="340" cy="570" rx="130" ry="10" fill="#F59E0B" fill-opacity="0.12"/>
+  <path d="M232,210 L232,490 L330,490 Q452,490 478,430 Q496,392 496,350 Q496,308 478,268 Q452,210 330,210 Z" fill="url(#dGold)"/>
+  <path d="M272,248 L322,248 Q420,248 442,302 Q456,328 456,350 Q456,372 442,398 Q420,452 322,452 L272,452 Z" fill="#050402"/>
+  <rect x="224" y="205" width="108" height="9" rx="1.5" fill="#FFDDB8" opacity="0.95"/>
+  <rect x="224" y="486" width="108" height="9" rx="1.5" fill="#FFDDB8" opacity="0.95"/>
+  <line x1="232" y1="350" x2="490" y2="350" stroke="#FFC174" stroke-width="0.6" stroke-opacity="0.25"/>
+  <circle cx="210" cy="300" r="1.5" fill="#F59E0B" fill-opacity="0.7"/>
+  <circle cx="200" cy="380" r="1" fill="#FFC174" fill-opacity="0.5"/>
+  <circle cx="470" cy="290" r="1.5" fill="#F59E0B" fill-opacity="0.7"/>
+  <circle cx="480" cy="400" r="1" fill="#FFC174" fill-opacity="0.5"/>
+  <circle cx="370" cy="118" r="1.5" fill="#FFC174" fill-opacity="0.6"/>
+  <rect x="108" y="564" width="464" height="18" fill="url(#goldH)" rx="2"/>
+  <rect x="108" y="558" width="464" height="6" fill="#1C1511" rx="1"/>
+  <circle cx="180" cy="573" r="3" fill="#0E0E0E" stroke="#F59E0B" stroke-width="0.8"/>
+  <circle cx="340" cy="573" r="3" fill="#0E0E0E" stroke="#F59E0B" stroke-width="0.8"/>
+  <circle cx="500" cy="573" r="3" fill="#0E0E0E" stroke="#F59E0B" stroke-width="0.8"/>
+  <text x="340" y="624" text-anchor="middle" font-family="Georgia, serif" font-size="36" font-weight="400" letter-spacing="14" fill="#FFC174">DOMINUS</text>
+  <line x1="192" y1="636" x2="488" y2="636" stroke="#F59E0B" stroke-width="0.7" stroke-opacity="0.55"/>
+  <text x="340" y="658" text-anchor="middle" font-family="'Courier New', monospace" font-size="10" letter-spacing="5" fill="#7A7370">SOLANA DEFI AGENT</text>
+  <rect x="1" y="1" width="678" height="678" fill="none" stroke="#534434" stroke-width="1" rx="28"/>
+</svg>
